@@ -20,8 +20,7 @@ document.addEventListener('keydown', function (e) {
     const k = e.key.toUpperCase();
     if (k.startsWith('F') && k.length > 1 || e.repeat) // Don't cancel keypresses for function keys, also repeat is canceled
         return;
-
-    console.log(k);
+        
     e.preventDefault();
 
     if (keys[k] === undefined)
