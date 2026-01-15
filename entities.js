@@ -9,6 +9,10 @@ class Entity {
 
     update(dt) { }
     render(ctx, dt, images) { }
+
+    destroy() {
+        entities.splice(entities.indexOf(this), 1);
+    }
 }
 
 class PlayerEntity extends Entity {
@@ -39,7 +43,7 @@ class PlayerEntity extends Entity {
         this.immune = Math.max(0, this.immune - dt);
         let speed = this.speed;
 
-        if(this.isImmune && !this.dead)
+        if (this.isImmune && !this.dead)
             speed *= Math.pow(this.immune / this.immuneDuration, 3) + 1;
 
         this.position.x += this.horizontal * speed * dt;
@@ -48,7 +52,7 @@ class PlayerEntity extends Entity {
     render(ctx, dt, images) {
         if (!this.dead && this.isImmune && fraction(this.immune * 4) > .5)
             ctx.globalAlpha = .3;
-        if(this.dead) {
+        if (this.dead) {
             const t = Math.min(1, (Date.now() - PlayerEntity.#deathFadeStart) / (this.deathAEnd - PlayerEntity.#deathFadeStart));
             ctx.globalAlpha = Math.pow(1 - t, 4);
         }
@@ -63,13 +67,14 @@ class PlayerEntity extends Entity {
         ctx.font = "24px Arial";
         ctx.fillText(this.immune.toFixed(2), screenPosition.x + 120, screenPosition.y);
     }
+    destroy() { console.error("Sorry, you can't destroy the player!"); }
 
     hurt() {
         if (this.isImmune) return;
 
         this.lives--;
 
-        if(this.lives <= 0)
+        if (this.lives <= 0)
             this.die();
         else
             this.immune = this.immuneDuration; // Immunity for 3 seconds
@@ -91,14 +96,16 @@ class PlayerEntity extends Entity {
 }
 
 class ChainsawEnemy extends Entity {
-    static baseSpeed = 0;
-    static speedIncrementInterval = 0;
-    static speedIncrementAmount = 0;
-    static speedAmountChangeScale = 0;
-    static #speedIncreaseTimer = 0;
-
+    static baseSpeed = 60;
+    static #speedIncrementInterval = 10;
+    static #speedIncrementAmount = 8;
+    static #speedAmountChangeScale = .95;
+    static #nextSpeedIncrease = 0;
+    
     static #impulseDampen = -10;
     static #collisionImpulse = 100;
+
+    static #removalDistance = 5000 * 5000; // Note: squared
 
     constructor(position, size) {
         super(position, size);
@@ -107,27 +114,18 @@ class ChainsawEnemy extends Entity {
         this.playerDistance = 0;
     }
 
-    static setValues(_baseSpeed, _speedIncrementInterval, _speedIncrementAmount, speedAmountChangeScale) {
-        this.baseSpeed = _baseSpeed;
-        this.speedIncrementInterval = _speedIncrementInterval;
-        this.speedIncrementAmount = _speedIncrementAmount; 
-        this.speedAmountChangeScale = speedAmountChangeScale;
-    }
-
-    static staticUpdate(dt) {
-        this.#speedIncreaseTimer += dt;
-
-        if(this.#speedIncreaseTimer >= this.speedIncrementInterval) {
-            this.baseSpeed += this.speedIncrementAmount;
-            this.speedIncrementAmount *= this.speedAmountChangeScale
-            this.#speedIncreaseTimer = 0;
+    static staticUpdate() {
+        if (gameTime >= this.#nextSpeedIncrease) {
+            this.baseSpeed += this.#speedIncrementAmount;
+            this.#speedIncrementAmount *= this.#speedAmountChangeScale
+            this.#nextSpeedIncrease += this.#speedIncrementInterval;
         }
     }
 
     static flipRotation(rot) {
-        if(rot <= 0)
+        if (rot <= 0)
             return Math.PI + rot;
-        
+
         return -Math.PI + rot;
     }
 
@@ -137,7 +135,13 @@ class ChainsawEnemy extends Entity {
         this.position.x += move.x + this.impulse.x;
         this.position.y += move.y + this.impulse.y;
 
-        if(!this.impulse.equals(Point.zero)) {
+        this.playerDistance = sqrDistance(player.position, this.position);
+        if(this.playerDistance >= ChainsawEnemy.#removalDistance) {
+            this.destroy();
+            return;
+        }
+
+        if (!this.impulse.equals(Point.zero)) {
             let signX = Math.sign(this.impulse.x);
             let signY = Math.sign(this.impulse.y);
 
@@ -145,50 +149,45 @@ class ChainsawEnemy extends Entity {
             this.impulse.y += ChainsawEnemy.#impulseDampen * signY;
 
             // Impulse is only a one time launch, so make it zero if it goes below/above it, while preserving the original direction
-            if(Math.sign(this.impulse.x) !== signX)
+            if (Math.sign(this.impulse.x) !== signX)
                 this.impulse.x = 0;
-            if(Math.sign(this.impulse.y) !== signY)
+            if (Math.sign(this.impulse.y) !== signY)
                 this.impulse.y = 0;
         }
 
-        this.playerDistance = sqrDistance(player.position, this.position);
-
         // Check if an enemy is touching the player
-        if (!player.isImmune && this.playerDistance < 150 * 150 && dt !== 0){
+        if (!player.isImmune && this.playerDistance < 150 * 150 && dt !== 0) {
             player.hurt();
 
             // The player only took damage, launch the enemy away from it
-            if(!player.dead)
+            if (!player.dead)
                 this.impulse = moveDirection(ChainsawEnemy.flipRotation(this.rotation), ChainsawEnemy.#collisionImpulse);
         }
     }
 
-    render(ctx, dt, images) {
+    render(ctx, dt, images, transf) {
         // Draw a single enemy
-        ctx.save();
-        ctx.translate(this.screenX + this.size.width / 2, this.screenY + this.size.height / 2); // Required to add half size, for center pivot
+        const center = new Point(this.screenX + this.size.width / 2, this.screenY + this.size.height / 2);
+        ctx.translate(center.x, center.y); // Required to add half size, for center pivot
         let flip = Math.abs(this.rotation) >= Math.PI * 0.5 ? 1 : -1;
-        if(this.playerDistance < 25) // Avoid back-to-back flickering when the enemy is at the same pos as the player
+        if (this.playerDistance < 25) // Avoid back-to-back flickering when the enemy is at the same pos as the player
             flip = 1;
         ctx.scale(flip, 1);
         ctx.drawImage(images['chainsaw'], -this.size.width / 2, -this.size.height / 2, this.size.width, this.size.height)
-        if (DEBUG) {
-            fillCirlce(ctx, -this.size.width / 2, -this.size.height / 2, 3, 'green');
-        }
-
-        ctx.restore();
-
-        if (!DEBUG) return;
 
         // Debug
-        let screenPosition = translatePoint(this.position);
-        fillCirlce(ctx, screenPosition.x, screenPosition.y, 3, 'blue');
-        line(ctx, screenPosition, screenPosition.add(moveDirection(this.rotation, 120)), 'purple');
+        if (!DEBUG) return;
+        ctx.setTransform(transf);
+
+        fillCirlce(ctx, center.x - this.size.width / 2, center.y - this.size.height / 2, 3, 'green');
+
+        fillCirlce(ctx, center.x, center.y, 3, 'blue');
+        line(ctx, center, center.add(moveDirection(this.rotation, 120)), 'purple');
         ctx.fillStyle = 'black';
         ctx.font = '22px Arial';
-        ctx.fillText(this.rotation, screenPosition.x - 500, screenPosition.y);
+        ctx.fillText(this.rotation, center.x - 500, center.y);
         ctx.fillStyle = 'blue';
-        ctx.fillText(flip, screenPosition.x - 500, screenPosition.y + 50);
-        strokeCirlce(ctx, screenPosition.x, screenPosition.y, 150, 'orange');
+        ctx.fillText(flip, center.x - 500, center.y + 50);
+        strokeCirlce(ctx, center.x, center.y, 150, 'orange');
     }
 }

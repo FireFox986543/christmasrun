@@ -18,10 +18,13 @@ const mousePosition = new Point(0, 0);
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener('keydown', function (e) {
     const k = e.key.toUpperCase();
-    if (k.startsWith('F') && k.length > 1 || e.repeat) // Don't cancel keypresses for function keys, also repeat is canceled
+    if(e.repeat) // Cancel Windows' stupid repeating functionality
         return;
-        
-    e.preventDefault();
+
+    // Preserve some of the browsers' features
+    const preserved = [KeyCode.KeyF5, KeyCode.KeyF11, KeyCode.KeyF12];
+    if (preserved.indexOf(k) === -1)
+        e.preventDefault();
 
     if (keys[k] === undefined)
         keys[k] = new KeyPress((e.type == "keydown"), false);
@@ -41,8 +44,8 @@ document.addEventListener('keyup', function (e) {
     }
 })
 document.addEventListener("mousemove", (e) => {
-    mousePosition.x = e.clientX;
-    mousePosition.y = e.clientY;
+    mousePosition.x = (e.clientX - viewport.rect.left - viewport.offsetX) / viewport.scale;
+    mousePosition.y = (e.clientY- viewport.rect.top - viewport.offsetY) / viewport.scale;
 });
 document.addEventListener("pointermove", handleMouseButtons);
 document.addEventListener("pointerdown", handleMouseButtons);
@@ -150,6 +153,18 @@ const KeyCode = Object.freeze({
     KeyEnd: 'END',
     KeyPageUp: 'PAGEUP',
     KeyPageDown: 'PAGEDOWN',
+    KeyF1: 'F1',
+    KeyF2: 'F2',
+    KeyF3: 'F3',
+    KeyF4: 'F4',
+    KeyF5: 'F5',
+    KeyF6: 'F6',
+    KeyF7: 'F7',
+    KeyF8: 'F8',
+    KeyF9: 'F9',
+    KeyF10: 'F10',
+    KeyF11: 'F11',
+    KeyF12: 'F12',
 });
 const MouseButtons = Object.freeze({
     Left: 0,

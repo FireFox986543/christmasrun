@@ -16,30 +16,38 @@ let gameTime = 0;
 let lastTick = 0;
 let timeScale = 1;
 
-// Use this if referencing canvas' size in rendering loops! instead of canvas.width/height!
-let canvasSize = Size.zero;
-
 let nextEnemy = 1000;
-let enemySpawnRate = 60;
-let enemySpawnIncrease = 1
+let enemySpawnRate = 400;
+let nextRateIncrease = 10000;
+let enemyRateIncrease = 6000;
 
-let bugyi1 = 0;
-let bugyi2 = 0;
-let bugyi3 = 0;
-
-let lbugyi1 = 0;
-let lbugyi2 = 0;
-let lbugyi3 = 0;
-
-const DEBUG = true;
+let DEBUG = true;
+let enemySpawning = true;
 
 window.addEventListener("resize", resizeCanvas);
 
+const VIRTUAL_WIDTH = 1920;
+const VIRTUAL_HEIGHT = 1080;
+let visibleWidth = 0;
+let visibleHeight = 0;
+let viewLeft = 0;
+let viewRight = 0;
+let viewTop = 0;
+let viewBottom = 0;
+const viewport = {
+    rect: undefined,
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    cssWidth: 0,
+    cssHeight: 0
+};
+
 function resizeCanvas() {
-    console.log('resized');
+    // WARNING: a ton of hard to understand math here:
+    // If you DON'T want future HEADACHES, don't ever ever touch this
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    canvasSize = new Size(rect.width, rect.height);
 
     const width = Math.round(rect.width * dpr);
     const height = Math.round(rect.height * dpr);
@@ -47,9 +55,30 @@ function resizeCanvas() {
     if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.imageSmoothingEnabled = false;
     }
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+
+    viewport.rect = rect;
+    viewport.scale = rect.height / VIRTUAL_HEIGHT
+
+    viewport.offsetX = (rect.width - VIRTUAL_WIDTH * viewport.scale) / 2;
+    viewport.offsetY = (rect.height - VIRTUAL_HEIGHT * viewport.scale) / 2;
+
+    visibleWidth = rect.width / viewport.scale;
+    visibleHeight = rect.height / viewport.scale;
+    const visibleX = -viewport.offsetX / viewport.scale;
+    const visibleY = -viewport.offsetY / viewport.scale;
+    viewLeft = visibleX;
+    viewTop = visibleY;
+    viewRight = visibleX + visibleWidth;
+    viewBottom = visibleY + visibleHeight;
+
+    ctx.translate(viewport.offsetX, viewport.offsetY);
+    ctx.scale(viewport.scale, viewport.scale);
+
+    ctx.imageSmoothingEnabled = false;
 }
 async function requestImages() {
     const paths = {
@@ -85,14 +114,20 @@ function restartGame() {
     scrollX = 0;
     scrollY = 0;
     timeScale = 1;
+    gameTime = 0;
+    nextEnemy = 10;
+    enemySpawnRate = .4;
+    nextRateIncrease = 10;
+    enemyRateIncrease = 6;
 
     // Keep highscore across multiple restarts
     let highScore = player === undefined ? 0 : player.highScore;
 
-    //ChainsawEnemy.setValues(60, 10, 8, .95);
-    entities.push(new ChainsawEnemy(new Point(500, 500), new Size(200, 200), 0));
+    if (enemySpawning)
+        spawnEnemies(20, 2000, 400, 400);
+
+    //entities.push(new ChainsawEnemy(new Point(200, 200), new Size(200, 200), 0));
     spawnPlayer();
-    //spawnEnemies(10, 3000, 400, 400);
     player.highScore = highScore;
 }
 function startGame() {
@@ -121,11 +156,11 @@ function spawnEnemies(amount, scatter, nsW, nsH) {
     }
 }
 function spawnEnemyAround() {
-    let x = Math.random() * canvasSize.width + (Math.random() >= .5 ? 1 : -1) * canvasSize.width;
-    let y = Math.random() * canvasSize.height + (Math.random() >= .5 ? 1 : -1) * canvasSize.height;
+    const angle = Math.random() * Math.PI * 2;
+    const point = moveDirection(angle, Math.max(VIRTUAL_WIDTH, VIRTUAL_HEIGHT) + 300);
 
     // Spawn enemies relative to player -> add player pos to position
-    entities.push(new ChainsawEnemy(new Point(x, y).add(player.position), new Size(200, 200)));
+    entities.push(new ChainsawEnemy(player.position.add(point), new Size(200, 200)));
 }
 
 resizeCanvas();
@@ -150,6 +185,10 @@ function loop() {
 }
 
 function gameloop(dt) {
+
+    if (getKeyDown(KeyCode.KeyF1))
+        DEBUG = !DEBUG;
+
     if (timeScale === 0)
         return;
 
@@ -174,10 +213,13 @@ function gameloop(dt) {
     vertical *= damping;
 
     // Spawn enemies
-    if (performance.now() >= nextEnemy) {
+    if (gameTime >= nextRateIncrease) {
+        enemySpawnRate = Math.max(.180, enemySpawnRate - .5);
+        nextRateIncrease += enemyRateIncrease;
+    }
+    if (enemySpawning && gameTime >= nextEnemy) {
         spawnEnemyAround();
         nextEnemy += enemySpawnRate;
-        enemySpawnRate *= enemySpawnIncrease;
     }
 
     ChainsawEnemy.staticUpdate(dt);
@@ -194,67 +236,60 @@ function gameloop(dt) {
 }
 
 function render(dt) {
-    ctx.save();
-
     // Clear, Render background
     ctx.fillStyle = "#86d5f7";
-    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
 
     // Render xy axis lines
     if (DEBUG) {
         ctx.strokeStyle = 'black';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(translateX(), 0);
-        ctx.lineTo(translateX(), canvasSize.height);
+        ctx.moveTo(translateX(), viewTop);
+        ctx.lineTo(translateX(), viewTop + visibleHeight);
         ctx.stroke()
         ctx.beginPath();
-        ctx.moveTo(0, translateY());
-        ctx.lineTo(canvasSize.width, translateY());
+        ctx.moveTo(viewLeft, translateY());
+        ctx.lineTo(viewLeft + visibleWidth, translateY());
         ctx.stroke()
     }
 
-    let culled = 0;
     // Render entities
+    const transf = ctx.getTransform();
+    let culled = 0;
     entities.forEach(e => {
-        if (!isCulled(translatePoint(e.position), e.size))
-            e.render(ctx, dt, images);
+        if (!isCulled(translatePoint(e.position), e.size)) {
+            e.render(ctx, dt, images, transf);
+            ctx.setTransform(transf); // Reset the transform after every entity
+        }
         else
             culled++;
     });
 
     // Render debug entries
-    ctx.fillStyle = 'black';
     if (DEBUG) {
-
+        ctx.fillStyle = 'black';
         ctx.font = "20px Arial";
-        ctx.fillText(`Entities: ${entities.length}   culled: ${culled}`, 10, 40);
-        ctx.fillText(`Delta: ${dt.toFixed(4)} FPS: ${(1 / dt).toFixed(2)}`, 10, 80);
-        ctx.fillText(`Player(xy): ${player.position.x.toFixed(2)} ${player.position.y.toFixed(2)}`, 10, 120);
-        ctx.fillText(`Scroll(xy): ${scrollX.toFixed(2)} ${scrollY.toFixed(2)}`, 10, 140);
-        ctx.fillText(`Input(xy):  ${horizontal.toFixed(2)} ${vertical.toFixed(2)}`, 10, 200);
-        ctx.fillText(`Enemy speed:  ${ChainsawEnemy.baseSpeed}`, 10, 240);
+        const x = viewLeft + 10;
+        ctx.fillText(`Entities: ${entities.length}   culled: ${culled}`, x, 40);
+        ctx.fillText(`Delta: ${dt.toFixed(4)} FPS: ${(1 / dt).toFixed(2)}`, x, 80);
+        ctx.fillText(`Player(xy): ${player.position.x.toFixed(2)} ${player.position.y.toFixed(2)}`, x, 120);
+        ctx.fillText(`Scroll(xy): ${scrollX.toFixed(2)} ${scrollY.toFixed(2)}`, x, 140);
+        ctx.fillText(`Input(xy):  ${horizontal.toFixed(2)} ${vertical.toFixed(2)}`, x, 200);
+        ctx.fillText(`Enemy speed:  ${ChainsawEnemy.baseSpeed}`, x, 240);
 
-        ctx.fillText(`H key down:  ${getKeyDown(KeyCode.KeyH)}     ${bugyi1}`, 10, 400);
-        ctx.fillText(`H key pres:  ${getKey(KeyCode.KeyH)}     ${bugyi2}`, 10, 450);
-        ctx.fillText(`H key rele:  ${getKeyUp(KeyCode.KeyH)}     ${bugyi3}`, 10, 500);
+        {
+            ctx.textAlign = 'right';
+            let x = viewRight - 20;
 
-        ctx.fillText(`L button down:  ${getMouseButtonDown(MouseButtons.Left)}     ${lbugyi1}`, 10, 600);
-        ctx.fillText(`L button pres:  ${getMouseButton(MouseButtons.Left)}     ${lbugyi2}`, 10, 650);
-        ctx.fillText(`L button rele:  ${getMouseButtonUp(MouseButtons.Left)}     ${lbugyi3}`, 10, 700);
+            ctx.fillText(`Enemy spawn rate: ${enemySpawnRate}`, x, 100);
+            ctx.fillText(`Enemy spawnrt inc: ${enemyRateIncrease}`, x, 120);
+        }
 
-        if (getKeyDown(KeyCode.KeyH))
-            bugyi1++;
-        if (getKey(KeyCode.KeyH))
-            bugyi2++;
-        if (getKeyUp(KeyCode.KeyH))
-            bugyi3++;
-
-        if (getMouseButtonDown(MouseButtons.Left))
-            lbugyi1++;
-        if (getMouseButton(MouseButtons.Left))
-            lbugyi2++;
-        if (getMouseButtonUp(MouseButtons.Left))
-            lbugyi3++;
+        ctx.textAlign = 'left';
     }
 
     // Render scores
@@ -271,10 +306,10 @@ function render(dt) {
         const sc = player.score.toFixed(2);
         const leftText = 'SCORE:   ';
         let width = ctx.measureText(leftText).width + digitWidth * sc.length;
-        let startX = canvasSize.width / 2 - width / 2;
+        let startX = VIRTUAL_WIDTH / 2 - width / 2;
 
         outlinedText(ctx, startX, 70, 0, 3, leftText); // Draw leftText (SCORE: )
-        startX = canvasSize.width / 2 + width / 2 - digitWidth * sc.length; // Start after leftText
+        startX = VIRTUAL_WIDTH / 2 + width / 2 - digitWidth * sc.length; // Start after leftText
         let delta = 0;
         // Draw each number with a fixed width
         for (let i = 0; i < sc.length; i++) {
@@ -286,7 +321,7 @@ function render(dt) {
         let text = `HIGHEST:  ${player.highScore.toFixed(2)}`
         width = ctx.measureText(text).width;
 
-        outlinedText(ctx, canvasSize.width / 2 - width / 2, 120, 0, 2, text);
+        outlinedText(ctx, VIRTUAL_WIDTH / 2 - width / 2, 120, 0, 2, text);
     }
 
     // Render lives
@@ -295,7 +330,7 @@ function render(dt) {
         const size = 48;
         const y = 150;
         const gap = 10;
-        const startX = canvasSize.width / 2 - (max * size + (max - 1) * gap) / 2;
+        const startX = VIRTUAL_WIDTH / 2 - (max * size + (max - 1) * gap) / 2;
 
         for (let i = 0; i < max; i++) {
             ctx.drawImage(images['ornament' + (i < player.lives ? '1' : '2')], startX + (size + gap) * i, y, size, size);
@@ -308,8 +343,8 @@ function render(dt) {
         let width = ctx.measureText(text).width;
 
         let t = Math.min(1, (Date.now() - player.deathAStart) / (player.deathAEnd - player.deathAStart));
-        let y = canvasSize.height / 2 - interpolate(t, 4) * 100;
-        let x = canvasSize.width / 2 - width / 2;
+        let y = VIRTUAL_HEIGHT / 2 - interpolate(t, 4) * 100;
+        let x = VIRTUAL_WIDTH / 2 - width / 2;
 
         ctx.lineWidth = 20;
         ctx.strokeStyle = `rgba(222, 42, 26, ${t.toFixed(2)})`;
@@ -319,8 +354,6 @@ function render(dt) {
 
     // Render mouse pointer
     ctx.drawImage(images['pointer1'], mousePosition.x, mousePosition.y, 80, 80);
-
-    ctx.restore();
 }
 
 // Transformation functions
@@ -328,12 +361,12 @@ function render(dt) {
 function interpolate(t, s) { return 1 - Math.pow(1 - t, s); }
 // Translate world space -> screen space
 function translatePoint(p) { return new Point(translateX(p.x), translateY(p.y)); }
-function translateX(x = 0) { return x - scrollX + canvasSize.width / 2; }
-function translateY(y = 0) { return y - scrollY + canvasSize.height / 2; }
+function translateX(x = 0) { return x - scrollX + VIRTUAL_WIDTH / 2; }
+function translateY(y = 0) { return y - scrollY + VIRTUAL_HEIGHT / 2; }
 // Translate screen space -> world space
 function revTranslatePoint(p) { return new Point(revTranslateX(p.x), revTranslateY(p.y)); }
-function revTranslateX(x = 0) { return x + scrollX - canvasSize.width / 2; }
-function revTranslateY(y = 0) { return y + scrollY - canvasSize.height / 2; }
+function revTranslateX(x = 0) { return x + scrollX - VIRTUAL_WIDTH / 2; }
+function revTranslateY(y = 0) { return y + scrollY - VIRTUAL_HEIGHT / 2; }
 function angleTowards(a, b) { return Math.atan2(a.y - b.y, a.x - b.x) }
 function moveDirection(angle, magnitude) { return new Point(Math.cos(angle) * magnitude, Math.sin(angle) * magnitude); }
 function sqrDistance(a, b) { return Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2); }
@@ -342,8 +375,8 @@ function rad(d) { return 180 / Math.PI * d; }
 function AABB(x1, y1, width1, height1, x2, y2, width2, height2) { return (x1 < x2 + width2 && x1 + width1 > x2) && (y1 < y2 + height2 && y1 + height1 > y2); }
 function AABBPoint(x, y, width, height, px, py) { return (px < x + width && px > x) && (py < y + height && py > y) }
 function isCulled(point, size) {
-    return point.x + size.width / 2 < 0 || point.x - size.width / 2 > canvasSize.width ||
-        point.y + size.height / 2 < 0 || point.y - size.height / 2 > canvasSize.height;
+    return point.x + size.width / 2 < viewLeft || point.x - size.width / 2 > viewLeft + visibleWidth ||
+        point.y + size.height / 2 < viewTop || point.y - size.height / 2 > viewTop + visibleHeight;
 }
 
 // Extra utilities
