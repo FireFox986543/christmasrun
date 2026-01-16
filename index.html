@@ -50,10 +50,16 @@
     <canvas id="gameCanvas">
         Sorry, your browser does not support canvas. Thus you can't play this game :(
     </canvas>
+
+    <!-- We don't use modules here, as they aren't supported via the file:// protocol -->
+    <!-- If this were to require a server, that would require less portability -->
     <script src="common.js"></script>
+    <script src="scene.js"></script>
+    <script src="menu_scene.js"></script>
+    <script src="game_scene.js"></script>
     <script src="input.js"></script>
     <script src="entities.js"></script>
-    <script src="game.js"></script>
+    <script src="game_engine.js"></script>
 </body>
 
 </html>

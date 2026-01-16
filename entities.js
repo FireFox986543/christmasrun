@@ -8,10 +8,10 @@ class Entity {
     get screenY() { return translateY(this.position.y - this.size.height / 2); }
 
     update(dt) { }
-    render(ctx, dt, images) { }
+    render(dt, images) { }
 
     destroy() {
-        entities.splice(entities.indexOf(this), 1);
+        scene.entities.splice(scene.entities.indexOf(this), 1);
     }
 }
 
@@ -29,7 +29,7 @@ class PlayerEntity extends Entity {
         this.dead = false;
         this.deathAStart = 0;
         this.deathAEnd = 0;
-        this.immune = false;
+        this.immune = 0;
         this.immuneDuration = 3;
     }
 
@@ -49,7 +49,7 @@ class PlayerEntity extends Entity {
         this.position.x += this.horizontal * speed * dt;
         this.position.y -= this.vertical * speed * dt;
     }
-    render(ctx, dt, images) {
+    render(dt, images) {
         if (!this.dead && this.isImmune && fraction(this.immune * 4) > .5)
             ctx.globalAlpha = .3;
         if (this.dead) {
@@ -60,9 +60,9 @@ class PlayerEntity extends Entity {
         ctx.drawImage(images['player'], this.screenX, this.screenY, this.size.width, this.size.height);
         ctx.globalAlpha = 1;
 
-        if (!DEBUG) return;
+        if (!scene.DEBUG) return;
         let screenPosition = translatePoint(this.position);
-        fillCirlce(ctx, screenPosition.x, screenPosition.y, 3, 'pink');
+        fillCircle(screenPosition.x, screenPosition.y, 3, 'pink');
         ctx.fillStyle = 'red';
         ctx.font = "24px Arial";
         ctx.fillText(this.immune.toFixed(2), screenPosition.x + 120, screenPosition.y);
@@ -90,7 +90,7 @@ class PlayerEntity extends Entity {
         PlayerEntity.#deathFadeStart = Date.now() + 250;
 
         setTimeout(() => {
-            restartGame();
+            scene.restartGame();
         }, 3500);
     }
 }
@@ -130,12 +130,12 @@ class ChainsawEnemy extends Entity {
     }
 
     update(dt) {
-        this.rotation = angleTowards(player.position, this.position);
+        this.rotation = angleTowards(scene.player.position, this.position);
         let move = moveDirection(this.rotation, ChainsawEnemy.baseSpeed * dt);
         this.position.x += move.x + this.impulse.x;
         this.position.y += move.y + this.impulse.y;
 
-        this.playerDistance = sqrDistance(player.position, this.position);
+        this.playerDistance = sqrDistance(scene.player.position, this.position);
         if(this.playerDistance >= ChainsawEnemy.#removalDistance) {
             this.destroy();
             return;
@@ -156,16 +156,16 @@ class ChainsawEnemy extends Entity {
         }
 
         // Check if an enemy is touching the player
-        if (!player.isImmune && this.playerDistance < 150 * 150 && dt !== 0) {
-            player.hurt();
+        if (!scene.player.isImmune && this.playerDistance < 150 * 150 && dt !== 0) {
+            scene.player.hurt();
 
             // The player only took damage, launch the enemy away from it
-            if (!player.dead)
+            if (!scene.player.dead)
                 this.impulse = moveDirection(ChainsawEnemy.flipRotation(this.rotation), ChainsawEnemy.#collisionImpulse);
         }
     }
 
-    render(ctx, dt, images, transf) {
+    render(dt, images, transf) {
         // Draw a single enemy
         const center = new Point(this.screenX + this.size.width / 2, this.screenY + this.size.height / 2);
         ctx.translate(center.x, center.y); // Required to add half size, for center pivot
@@ -176,18 +176,18 @@ class ChainsawEnemy extends Entity {
         ctx.drawImage(images['chainsaw'], -this.size.width / 2, -this.size.height / 2, this.size.width, this.size.height)
 
         // Debug
-        if (!DEBUG) return;
+        if (!scene.DEBUG) return;
         ctx.setTransform(transf);
 
-        fillCirlce(ctx, center.x - this.size.width / 2, center.y - this.size.height / 2, 3, 'green');
+        fillCircle( center.x - this.size.width / 2, center.y - this.size.height / 2, 3, 'green');
 
-        fillCirlce(ctx, center.x, center.y, 3, 'blue');
-        line(ctx, center, center.add(moveDirection(this.rotation, 120)), 'purple');
+        fillCircle(center.x, center.y, 3, 'blue');
+        line(center, center.add(moveDirection(this.rotation, 120)), 'purple');
         ctx.fillStyle = 'black';
         ctx.font = '22px Arial';
         ctx.fillText(this.rotation, center.x - 500, center.y);
         ctx.fillStyle = 'blue';
         ctx.fillText(flip, center.x - 500, center.y + 50);
-        strokeCirlce(ctx, center.x, center.y, 150, 'orange');
+        strokeCircle(center.x, center.y, 150, 'orange');
     }
 }
