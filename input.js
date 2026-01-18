@@ -13,7 +13,7 @@ const mouseButtons = {
     3: new KeyPress(false, true),
     4: new KeyPress(false, true),
 };
-const mousePosition = new Point(0, 0);
+const mousePosition = new Point(0, -1000);
 
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener('keydown', function (e) {
@@ -44,10 +44,13 @@ document.addEventListener('keyup', function (e) {
     }
 })
 document.addEventListener("mousemove", (e) => {
+    if(viewport.rect === undefined)
+        return;
+
     mousePosition.x = (e.clientX - viewport.rect.left - viewport.offsetX) / viewport.scale;
     mousePosition.y = (e.clientY- viewport.rect.top - viewport.offsetY) / viewport.scale;
 });
-document.addEventListener("pointermove", handleMouseButtons);
+//document.addEventListener("pointermove", handleMouseButtons); pointermove causes problems when moving the mouse around and clicks not registering! So I temporarly removed it
 document.addEventListener("pointerdown", handleMouseButtons);
 document.addEventListener("pointerup", handleMouseButtons);
 
@@ -167,9 +170,9 @@ const KeyCode = Object.freeze({
     KeyF12: 'F12',
 });
 const MouseButtons = Object.freeze({
-    Left: 0,
-    Right: 1,
-    Middle: 2,
-    Back: 3,
-    Forward: 4,
+    LEFT: 0,
+    RIGHT: 1,
+    MIDDLE: 2,
+    BACK: 3,
+    FORWARD: 4,
 })

@@ -10,21 +10,22 @@ window.addEventListener("resize", resizeCanvas);
 
 let lastTick = 0;
 let timeScale = 1;
-let gameTime = 0;
 
 const VIRTUAL_WIDTH = 1920;
 const VIRTUAL_HEIGHT = 1080;
-let visibleWidth = 0;
-let visibleHeight = 0;
-let viewLeft = 0;
-let viewRight = 0;
-let viewTop = 0;
-let viewBottom = 0;
 const viewport = {
     rect: undefined,
     scale: 1,
     offsetX: 0,
-    offsetY: 0
+    offsetY: 0,
+    visibleWidth: 0,
+    visibleWidth2: 0,
+    visibleHeight: 0,
+    visibleHeight2: 0,
+    viewLeft: 0,
+    viewRight: 0,
+    viewTop: 0,
+    viewBottom: 0,
 };
 
 function resizeCanvas() {
@@ -50,14 +51,16 @@ function resizeCanvas() {
     viewport.offsetX = (rect.width - VIRTUAL_WIDTH * viewport.scale) / 2;
     viewport.offsetY = (rect.height - VIRTUAL_HEIGHT * viewport.scale) / 2;
 
-    visibleWidth = rect.width / viewport.scale;
-    visibleHeight = rect.height / viewport.scale;
+    viewport.visibleWidth = rect.width / viewport.scale;
+    viewport.visibleWidth2 = rect.width / viewport.scale / 2;
+    viewport.visibleHeight = rect.height / viewport.scale;
+    viewport.visibleHeight2 = rect.height / viewport.scale / 2;
     const visibleX = -viewport.offsetX / viewport.scale;
     const visibleY = -viewport.offsetY / viewport.scale;
-    viewLeft = visibleX;
-    viewTop = visibleY;
-    viewRight = visibleX + visibleWidth;
-    viewBottom = visibleY + visibleHeight;
+    viewport.viewLeft = visibleX;
+    viewport.viewTop = visibleY;
+    viewport.viewRight = visibleX + viewport.visibleWidth;
+    viewport.viewBottom = visibleY + viewport.visibleHeight;
 
     ctx.translate(viewport.offsetX, viewport.offsetY);
     ctx.scale(viewport.scale, viewport.scale);
@@ -72,6 +75,7 @@ async function requestImages() {
         'pointer2': 'src/pointer2.png',
         'ornament1': 'src/ornament.png',
         'ornament2': 'src/ornamentDark.png',
+        'ui_atlas': 'src/ui_atlas.png',
     }
     let loaded = 0;
 
@@ -97,12 +101,12 @@ gameEngineStart();
 
 function loop() {
     if (scene !== null) {
-        let dt = Math.min(0.05, (performance.now() - lastTick) / 1000);
+        let dt = Math.min(0.05, (performance.now() - lastTick) / 1000) * timeScale;
         lastTick = performance.now();
 
         try {
-            scene.gameLoop(dt * timeScale);
-            scene.render(dt * timeScale);
+            scene.gameLoop(dt);
+            scene.render(dt);
 
             processKeys();
             scene.gameTime += dt;
@@ -117,10 +121,13 @@ function loop() {
 
 function gameEngineStart() {
     requestImages().then(() => {
-        if (defaultScene !== null)
-            loadScene(defaultScene);
+        // Wait for the font to load then we could properly draw with the right one
+        document.fonts.load('16px "Jersey 10"').then(() => {
+            if (defaultScene !== null)
+                loadScene(defaultScene);
 
-        loop();
+            loop();
+        });
     });
 }
 
@@ -130,20 +137,26 @@ function loadScene(sc) {
         throw new Error("No scene to load!");
 
     if (scene !== null)
-        scene.onUnload();
+        unloadScene(scene);
 
     scene = sc;
+    console.log(`Loading '${sc.constructor.name}' scene . . .`);
     scene.onLoad();
 }
 function unloadScene() {
     if (scene !== null)
         scene.onUnload();
+
+    _lastSelectedElement = null;
+    selectedUIElement = null;
+    pointerType = PointerTypes.POINTER;
 }
 
 
 // Transformation functions
 
-function interpolate(t, s) { return 1 - Math.pow(1 - t, s); }
+function interpolateEaseIn(t, s) { return 1 - Math.pow(1 - t, s); }
+function interpolateEaseOut(t, s) { return Math.pow(t, s); }
 // Translate world space -> screen space
 function translatePoint(p) { return new Point(translateX(p.x), translateY(p.y)); }
 function translateX(x = 0) { return x - scene.scrollX + VIRTUAL_WIDTH / 2; }
@@ -155,14 +168,16 @@ function revTranslateY(y = 0) { return y + scene.scrollY - VIRTUAL_HEIGHT / 2; }
 function angleTowards(a, b) { return Math.atan2(a.y - b.y, a.x - b.x) }
 function moveDirection(angle, magnitude) { return new Point(Math.cos(angle) * magnitude, Math.sin(angle) * magnitude); }
 function sqrDistance(a, b) { return Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2); }
-function deg(r) { return Math.PI / 180 * r; }
-function rad(d) { return 180 / Math.PI * d; }
-function AABB(x1, y1, width1, height1, x2, y2, width2, height2) { return (x1 < x2 + width2 && x1 + width1 > x2) && (y1 < y2 + height2 && y1 + height1 > y2); }
-function AABBPoint(x, y, width, height, px, py) { return (px < x + width && px > x) && (py < y + height && py > y) }
+function deg2rad(d) { return Math.PI / 180 * d; }
+function rad2deg(r) { return 180 / Math.PI * r; }
+function AABB(rectA, rectB) { return (rectA.x < rectB.x + rectB.width && rectA.x + rectA.width > rectB.x) && (rectA.y < rectB.y + rectB.height && rectA.y + rectA.height > rectB.y); }
+function AABBPoint(rect, point) { return (point.x < rect.x + rect.width && point.x >= rect.x) && (point.y < rect.y + rect.height && point.y >= rect.y) }
 function isCulled(point, size) {
-    return point.x + size.width / 2 < viewLeft || point.x - size.width / 2 > viewLeft + visibleWidth ||
-        point.y + size.height / 2 < viewTop || point.y - size.height / 2 > viewTop + visibleHeight;
+    return point.x + size.width / 2 < viewport.viewLeft || point.x - size.width / 2 > viewport.viewLeft + viewport.visibleWidth ||
+        point.y + size.height / 2 < viewport.viewTop || point.y - size.height / 2 > viewport.viewTop + viewport.visibleHeight;
 }
+
+function arrayRemove(array, target) { array.splice(array.indexOf(target), 1); }
 
 // Extra utilities
 function fraction(n) { return n - Math.trunc(n) };
@@ -181,8 +196,8 @@ function strokeCircle(x, y, radius, color) {
     ctx.stroke();
 }
 function outlinedText(x, y, offsetX, offsetY, text) {
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
+    ctx.lineJoin = "square";
+    ctx.lineCap = "square";
     ctx.miterLimit = 2;
     ctx.strokeText(text, x + offsetX, y + offsetY);
     ctx.fillText(text, x, y);
@@ -203,6 +218,34 @@ function clearBuffer(c) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.restore();
 }
-function renderPointer() {
-    ctx.drawImage(images['pointer1'], mousePosition.x, mousePosition.y, 80, 80);
+function renderEntities(dt) {
+    let culled = 0;
+    const transf = ctx.getTransform();
+    for (let i = 0; i < scene.entities.length; i++) {
+        const e = scene.entities[i];
+        if (!isCulled(translatePoint(e.position), e.size)) {
+            e.render(dt, images, transf);
+            ctx.setTransform(transf); // Reset the transform after every entity
+        }
+        else
+            culled++;
+    }
+    return culled;
+}
+function renderUIElements() {
+    let fillStyle = ctx.fillStyle;
+    let strokeStyle = ctx.strokeStyle;
+    let textBaseline = ctx.textBaseline;
+    const transf = ctx.getTransform();
+    for (let i = 0; i < scene.uiElements.length; i++) {
+        const e = scene.uiElements[i];
+        if(e.isActive) {
+            e.render();
+            ctx.setTransform(transf); // Reset the transform after every ui element
+        }
+    }
+
+    ctx.fillStyle = fillStyle;
+    ctx.strokeStyle = strokeStyle;
+    ctx.textBaseline = textBaseline;
 }

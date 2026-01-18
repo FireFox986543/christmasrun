@@ -11,7 +11,7 @@ class Entity {
     render(dt, images) { }
 
     destroy() {
-        scene.entities.splice(scene.entities.indexOf(this), 1);
+        arrayRemove(scene.entities, this);
     }
 }
 
@@ -23,14 +23,15 @@ class PlayerEntity extends Entity {
         this.speed = speed;
         this.horizontal = 0;
         this.vertical = 0;
-        this.lives = 3;
+        this.maxLives = scene.difficulty.playerMaxLives;
+        this.lives = this.maxLives;
         this.highScore = 0;
         this.score = 0;
         this.dead = false;
         this.deathAStart = 0;
         this.deathAEnd = 0;
         this.immune = 0;
-        this.immuneDuration = 3;
+        this.immuneDuration = scene.difficulty.playerImmuneDuration;
     }
 
     get isImmune() { return this.immune > 0; }
@@ -96,14 +97,8 @@ class PlayerEntity extends Entity {
 }
 
 class ChainsawEnemy extends Entity {
-    static baseSpeed = 60;
-    static #speedIncrementInterval = 10;
-    static #speedIncrementAmount = 8;
-    static #speedAmountChangeScale = .95;
-    static #nextSpeedIncrease = 0;
-    
-    static #impulseDampen = -10;
-    static #collisionImpulse = 100;
+    static #impulseDampen = -5;
+    static #collisionImpulse = 75;
 
     static #removalDistance = 5000 * 5000; // Note: squared
 
@@ -115,10 +110,10 @@ class ChainsawEnemy extends Entity {
     }
 
     static staticUpdate() {
-        if (gameTime >= this.#nextSpeedIncrease) {
-            this.baseSpeed += this.#speedIncrementAmount;
-            this.#speedIncrementAmount *= this.#speedAmountChangeScale
-            this.#nextSpeedIncrease += this.#speedIncrementInterval;
+        if (scene.gameTime >= scene.difficulty.enemyNextSpeedIncrease) {
+            scene.difficulty.enemyStartSpeed = Math.min(scene.difficulty.enemyMaxSpeed, scene.difficulty.enemyStartSpeed + scene.difficulty.enemySpeedIncrementAmount);
+            scene.difficulty.enemySpeedIncrementAmount *= scene.difficulty.enemySpeedAmountChangeScale
+            scene.difficulty.enemyNextSpeedIncrease += scene.difficulty.enemySpeedIncrementInterval;
         }
     }
 
@@ -131,12 +126,12 @@ class ChainsawEnemy extends Entity {
 
     update(dt) {
         this.rotation = angleTowards(scene.player.position, this.position);
-        let move = moveDirection(this.rotation, ChainsawEnemy.baseSpeed * dt);
+        let move = moveDirection(this.rotation, scene.difficulty.enemyStartSpeed * dt);
         this.position.x += move.x + this.impulse.x;
         this.position.y += move.y + this.impulse.y;
 
         this.playerDistance = sqrDistance(scene.player.position, this.position);
-        if(this.playerDistance >= ChainsawEnemy.#removalDistance) {
+        if (this.playerDistance >= ChainsawEnemy.#removalDistance) {
             this.destroy();
             return;
         }
@@ -156,7 +151,7 @@ class ChainsawEnemy extends Entity {
         }
 
         // Check if an enemy is touching the player
-        if (!scene.player.isImmune && this.playerDistance < 150 * 150 && dt !== 0) {
+        if (!scene.player.isImmune && this.playerDistance < scene.difficulty.enemyCollisionRadiusSquared && dt !== 0) {
             scene.player.hurt();
 
             // The player only took damage, launch the enemy away from it
@@ -179,7 +174,7 @@ class ChainsawEnemy extends Entity {
         if (!scene.DEBUG) return;
         ctx.setTransform(transf);
 
-        fillCircle( center.x - this.size.width / 2, center.y - this.size.height / 2, 3, 'green');
+        fillCircle(center.x - this.size.width / 2, center.y - this.size.height / 2, 3, 'green');
 
         fillCircle(center.x, center.y, 3, 'blue');
         line(center, center.add(moveDirection(this.rotation, 120)), 'purple');
@@ -188,6 +183,6 @@ class ChainsawEnemy extends Entity {
         ctx.fillText(this.rotation, center.x - 500, center.y);
         ctx.fillStyle = 'blue';
         ctx.fillText(flip, center.x - 500, center.y + 50);
-        strokeCircle(center.x, center.y, 150, 'orange');
+        strokeCircle(center.x, center.y, scene.difficulty.enemyCollisionRadius, 'orange');
     }
 }

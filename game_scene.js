@@ -1,6 +1,10 @@
 class ChaseGameScene extends Scene {
-    constructor() {
+    constructor(difficultyLevel) {
         super();
+
+        this.resetDifficulties();
+        this.difficultyLevel = difficultyLevel;
+        this.difficulty = this.difficulties[difficultyLevel];
 
         this.player;
 
@@ -10,18 +14,15 @@ class ChaseGameScene extends Scene {
         this.scrollX = 0;
         this.scrollY = 0;
 
-        this.nextEnemy = 1000;
-        this.enemySpawnRate = 400;
-        this.nextRateIncrease = 10000;
-        this.enemyRateIncrease = 6000;
-
-        this.DEBUG = true;
+        this.DEBUG = false;
         this.enemySpawning = true;
     }
 
     gameLoop(dt) {
         if (getKeyDown(KeyCode.KeyF1))
             this.DEBUG = !this.DEBUG;
+        if(getKeyDown(KeyCode.KeyI))
+            this.player.lives = 100000;
 
         if (timeScale === 0)
             return;
@@ -33,10 +34,15 @@ class ChaseGameScene extends Scene {
                 timeScale = 0;
         }
         else {
-            this.horizontal += (getKey(KeyCode.KeyA) ? -1 : 0) + (getKey(KeyCode.KeyD) ? 1 : 0);
+            const keyA = getKey(KeyCode.KeyA) || getKey(KeyCode.KeyArrowLeft);
+            const keyD = getKey(KeyCode.KeyD) || getKey(KeyCode.KeyArrowRight);
+            const keyW = getKey(KeyCode.KeyW) || getKey(KeyCode.KeyArrowUp);
+            const keyS = getKey(KeyCode.KeyS) || getKey(KeyCode.KeyArrowDown);
+
+            this.horizontal += (keyA ? -1 : 0) + (keyD ? 1 : 0);
             this.horizontal = Math.max(-1, Math.min(1, this.horizontal))
 
-            this.vertical += (getKey(KeyCode.KeyS) ? -1 : 0) + (getKey(KeyCode.KeyW) ? 1 : 0);
+            this.vertical += (keyS ? -1 : 0) + (keyW ? 1 : 0);
             this.vertical = Math.max(-1, Math.min(1, this.vertical))
 
             this.player.syncInput(this.horizontal, this.vertical);
@@ -47,20 +53,26 @@ class ChaseGameScene extends Scene {
         this.vertical *= damping;
 
         // Spawn enemies
-        if (gameTime >= this.nextRateIncrease) {
-            this.enemySpawnRate = Math.max(.180, this.enemySpawnRate - .5);
-            this.nextRateIncrease += this.enemyRateIncrease;
+        if (this.gameTime >= this.difficulty.nextSpawnIntvIncrease) {
+            this.difficulty.enemySpawnInterval = Math.max(this.difficulty.enemySpawnIntervalMin,
+                this.difficulty.enemySpawnInterval - this.difficulty.enemySpawnIntvIncrAmount);
+
+            if (this.difficulty.enemySpawnIntvIncrInterval === 9) // After .2
+                this.difficulty.enemySpawnIntvIncrInterval = 30;
+            else
+                this.difficulty.enemySpawnIntvIncrInterval++;
+
+            this.difficulty.nextSpawnIntvIncrease += this.difficulty.enemySpawnIntvIncrInterval;
         }
-        if (this.enemySpawning && this.gameTime >= this.nextEnemy) {
+        if (this.enemySpawning && this.gameTime >= this.difficulty.nextEnemySpawn) {
             this.spawnEnemyAround();
-            this.nextEnemy += this.enemySpawnRate;
+            this.difficulty.nextEnemySpawn += this.difficulty.enemySpawnInterval;
         }
 
         ChainsawEnemy.staticUpdate(dt);
 
-        this.entities.forEach(e => {
-            e.update(dt);
-        });
+        for(let i = 0; i < this.entities.length; i++)
+            this.entities[i].update(dt);
 
         this.scrollX += (this.player.position.x - this.scrollX) * .2;
         this.scrollY += (this.player.position.y - this.scrollY) * .2;
@@ -77,45 +89,40 @@ class ChaseGameScene extends Scene {
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(translateX(), viewTop);
-            ctx.lineTo(translateX(), viewTop + visibleHeight);
+            ctx.moveTo(translateX(), viewport.viewTop);
+            ctx.lineTo(translateX(), viewport.viewTop + viewport.visibleHeight);
             ctx.stroke()
             ctx.beginPath();
-            ctx.moveTo(viewLeft, translateY());
-            ctx.lineTo(viewLeft + visibleWidth, translateY());
+            ctx.moveTo(viewport.viewLeft, translateY());
+            ctx.lineTo(viewport.viewLeft + viewport.visibleWidth, translateY());
             ctx.stroke()
         }
 
         // Render entities
-        const transf = ctx.getTransform();
-        let culled = 0;
-        this.entities.forEach(e => {
-            if (!isCulled(translatePoint(e.position), e.size)) {
-                e.render(dt, images, transf);
-                ctx.setTransform(transf); // Reset the transform after every entity
-            }
-            else
-                culled++;
-        });
+        const culled = renderEntities(dt);
 
         // Render debug entries
         if (this.DEBUG) {
             ctx.fillStyle = 'black';
             ctx.font = "20px Arial";
-            const x = viewLeft + 10;
+            const x = viewport.viewLeft + 10;
             ctx.fillText(`Entities: ${this.entities.length}   culled: ${culled}`, x, 40);
             ctx.fillText(`Delta: ${dt.toFixed(4)} FPS: ${(1 / dt).toFixed(2)}`, x, 80);
             ctx.fillText(`Player(xy): ${this.player.position.x.toFixed(2)} ${this.player.position.y.toFixed(2)}`, x, 120);
             ctx.fillText(`Scroll(xy): ${this.scrollX.toFixed(2)} ${this.scrollY.toFixed(2)}`, x, 140);
             ctx.fillText(`Input(xy):  ${this.horizontal.toFixed(2)} ${this.vertical.toFixed(2)}`, x, 200);
-            ctx.fillText(`Enemy speed:  ${ChainsawEnemy.baseSpeed}`, x, 240);
+            ctx.fillText(`Enemy speed:  ${this.difficulty.enemyStartSpeed}`, x, 240);
 
             {
                 ctx.textAlign = 'right';
-                let x = viewRight - 20;
+                let x = viewport.viewRight - 20;
 
-                ctx.fillText(`Enemy spawn rate: ${this.enemySpawnRate}`, x, 100);
-                ctx.fillText(`Enemy spawnrt inc: ${this.enemyRateIncrease}`, x, 120);
+                ctx.fillText(`Scene: ${scene.constructor.name}`, x, 50);
+                ctx.fillText(`Difficulty: ${this.difficultyLevel}`, x, 75);
+                ctx.fillText(`Gametime: ${this.gameTime.toFixed(2)}`, x, 100);
+                ctx.fillText(`Enemy spawn next: ${this.difficulty.nextSpawnIntvIncrease}`, x, 120);
+                ctx.fillText(`Enemy spawn rate: ${this.difficulty.enemySpawnInterval}`, x, 140);
+                ctx.fillText(`Enemy spawnrt inc: ${this.difficulty.enemySpawnIntvIncrInterval}`, x, 160);
             }
 
             ctx.textAlign = 'left';
@@ -126,9 +133,6 @@ class ChaseGameScene extends Scene {
             ctx.fillStyle = 'white';
             ctx.strokeStyle = '#062a48';
             ctx.lineWidth = 16;
-            ctx.lineJoin = "round";
-            ctx.lineCap = "round";
-            ctx.miterLimit = 2;
             ctx.font = "100px 'Jersey 10'";
 
             const digitWidth = 52;
@@ -155,27 +159,26 @@ class ChaseGameScene extends Scene {
 
         // Render lives
         {
-            const max = 3;
             const size = 48;
             const y = 150;
             const gap = 10;
-            const startX = VIRTUAL_WIDTH / 2 - (max * size + (max - 1) * gap) / 2;
+            const startX = VIRTUAL_WIDTH / 2 - (this.player.maxLives * size + (this.player.maxLives - 1) * gap) / 2;
 
-            for (let i = 0; i < max; i++) {
+            for (let i = 0; i < this.player.maxLives; i++) {
                 ctx.drawImage(images['ornament' + (i < this.player.lives ? '1' : '2')], startX + (size + gap) * i, y, size, size);
             }
         }
 
         if (this.player.dead && Date.now() >= this.player.deathAStart) {
-            ctx.font = "164px 'Jersey 10'";
+            ctx.font = "256px 'Jersey 10'";
             let text = 'YOU  DIED!';
             let width = ctx.measureText(text).width;
 
             let t = Math.min(1, (Date.now() - this.player.deathAStart) / (this.player.deathAEnd - this.player.deathAStart));
-            let y = VIRTUAL_HEIGHT / 2 - interpolate(t, 4) * 100;
+            let y = VIRTUAL_HEIGHT / 2 - interpolateEaseIn(t, 4) * 100;
             let x = VIRTUAL_WIDTH / 2 - width / 2;
 
-            ctx.lineWidth = 20;
+            ctx.lineWidth = 48;
             ctx.strokeStyle = `rgba(222, 42, 26, ${t.toFixed(2)})`;
             ctx.fillStyle = `rgba(255, 255, 255, ${t.toFixed(2)})`;
             outlinedText(x, y, 0, 5, text);
@@ -185,23 +188,88 @@ class ChaseGameScene extends Scene {
         renderPointer();
     }
 
+    resetDifficulties() {
+        this.difficulties = [
+            { // Easy
+                startEnemies: 12, // How many enemies will spawn by default on game start
+                startEnemiesScatter: 2000, // Scattering of starting enemies
+                nextEnemySpawn: 16,
+                enemySpawnInterval: .5, // Every this interval an enemy will spawn
+                enemySpawnIntervalMin: .25, // The minimum interval for enemy spawns
+                enemySpawnDistance: 400, // Distance from player to spawn enemies outside of the screen
+                nextSpawnIntvIncrease: 14,
+                enemySpawnIntvIncrInterval: 8,  // Every this interval the enemySpawnInterval will change
+                enemySpawnIntvIncrAmount: 0.04, // enemySpawnInterval will change by this amount
+                playerImmuneDuration: 4,
+                playerMaxLives: 4,
+                enemyStartSpeed: 50,
+                enemyMaxSpeed: 70,
+                enemySpeedIncrementInterval: 12,
+                enemySpeedIncrementAmount: 6, // Enemies' speed changes by this every interval
+                enemySpeedAmountChangeScale: .9, // enemySpeedIncrementAmount scales by this every speed change
+                enemyNextSpeedIncrease: 18,
+                enemyCollisionRadius: 120,
+                enemyCollisionRadiusSquared: 120 * 120, // Squared distance in enemies will collide with the player
+            },
+            { // Normal
+                startEnemies: 20, // How many enemies will spawn by default on game start
+                startEnemiesScatter: 2000, // Scattering of starting enemies
+                nextEnemySpawn: 10,
+                enemySpawnInterval: .4, // Every this interval an enemy will spawn
+                enemySpawnIntervalMin: .18, // The minimum interval for enemy spawns
+                enemySpawnDistance: 300, // Distance from player to spawn enemies outside of the screen
+                nextSpawnIntvIncrease: 10,
+                enemySpawnIntvIncrInterval: 6,  // Every this interval the enemySpawnInterval will change
+                enemySpawnIntvIncrAmount: 0.05, // enemySpawnInterval will change by this amount
+                playerImmuneDuration: 3,
+                playerMaxLives: 3,
+                enemyStartSpeed: 60,
+                enemyMaxSpeed: 100,
+                enemySpeedIncrementInterval: 10,
+                enemySpeedIncrementAmount: 8, // Enemies' speed changes by this every interval
+                enemySpeedAmountChangeScale: .95, // enemySpeedIncrementAmount scales by this every speed change
+                enemyNextSpeedIncrease: 12,
+                enemyCollisionRadius: 150,
+                enemyCollisionRadiusSquared: 150 * 150, // Squared distance in enemies will collide with the player
+            },
+            { // Hard
+                startEnemies: 40, // How many enemies will spawn by default on game start
+                startEnemiesScatter: 1500, // Scattering of starting enemies
+                nextEnemySpawn: 6,
+                enemySpawnInterval: .3, // Every this interval an enemy will spawn
+                enemySpawnIntervalMin: .14, // The minimum interval for enemy spawns
+                enemySpawnDistance: 100, // Distance from player to spawn enemies outside of the screen
+                nextSpawnIntvIncrease: 6,
+                enemySpawnIntvIncrInterval: 4,  // Every this interval the enemySpawnInterval will change
+                enemySpawnIntvIncrAmount: 0.08, // enemySpawnInterval will change by this amount
+                playerImmuneDuration: 2.5,
+                playerMaxLives: 3,
+                enemyStartSpeed: 72,
+                enemyMaxSpeed: 120,
+                enemySpeedIncrementInterval: 7,
+                enemySpeedIncrementAmount: 8, // Enemies' speed changes by this every interval
+                enemySpeedAmountChangeScale: 1.1, // enemySpeedIncrementAmount scales by this every speed change
+                enemyNextSpeedIncrease: 8,
+                enemyCollisionRadius: 170,
+                enemyCollisionRadiusSquared: 170 * 170, // Squared distance in enemies will collide with the player
+            }
+        ];
+    }
     restartGame() {
         Object.keys(keys).forEach(key => delete keys[key]);
         this.entities.length = 0;
         this.scrollX = 0;
         this.scrollY = 0;
         timeScale = 1;
-        gameTime = 0;
-        this.nextEnemy = 10;
-        this.enemySpawnRate = .4;
-        this.nextRateIncrease = 10;
-        this.enemyRateIncrease = 6;
+        this.gameTime = 0;
+        this.resetDifficulties();
+        this.difficulty = this.difficulties[this.difficultyLevel];
 
         // Keep highscore across multiple restarts
         let highScore = this.player === undefined ? 0 : this.player.highScore;
 
         if (this.enemySpawning)
-            this.spawnEnemies(20, 2000, 400, 400);
+            this.spawnEnemies(this.difficulty.startEnemies, this.difficulty.startEnemiesScatter, 400, 400);
 
         //entities.push(new ChainsawEnemy(new Point(200, 200), new Size(200, 200), 0));
         this.spawnPlayer();
@@ -227,7 +295,7 @@ class ChaseGameScene extends Scene {
     }
     spawnEnemyAround() {
         const angle = Math.random() * Math.PI * 2;
-        const point = moveDirection(angle, Math.max(VIRTUAL_WIDTH, VIRTUAL_HEIGHT) + 300);
+        const point = moveDirection(angle, Math.max(VIRTUAL_WIDTH, VIRTUAL_HEIGHT) + this.difficulty.enemySpawnDistance);
 
         // Spawn enemies relative to player -> add player pos to position
         this.entities.push(new ChainsawEnemy(this.player.position.add(point), new Size(200, 200)));
