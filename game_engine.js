@@ -139,6 +139,7 @@ function loadScene(sc) {
     if (scene !== null)
         unloadScene(scene);
 
+    timeScale = 1;
     scene = sc;
     console.log(`Loading '${sc.constructor.name}' scene . . .`);
     scene.onLoad();
@@ -158,16 +159,13 @@ function unloadScene() {
 function interpolateEaseIn(t, s) { return 1 - Math.pow(1 - t, s); }
 function interpolateEaseOut(t, s) { return Math.pow(t, s); }
 // Translate world space -> screen space
-function translatePoint(p) { return new Point(translateX(p.x), translateY(p.y)); }
+function translatePoint(p) { return new Vector2(translateX(p.x), translateY(p.y)); }
 function translateX(x = 0) { return x - scene.scrollX + VIRTUAL_WIDTH / 2; }
 function translateY(y = 0) { return y - scene.scrollY + VIRTUAL_HEIGHT / 2; }
 // Translate screen space -> world space
-function revTranslatePoint(p) { return new Point(revTranslateX(p.x), revTranslateY(p.y)); }
+function revTranslatePoint(p) { return new Vector2(revTranslateX(p.x), revTranslateY(p.y)); }
 function revTranslateX(x = 0) { return x + scene.scrollX - VIRTUAL_WIDTH / 2; }
 function revTranslateY(y = 0) { return y + scene.scrollY - VIRTUAL_HEIGHT / 2; }
-function angleTowards(a, b) { return Math.atan2(a.y - b.y, a.x - b.x) }
-function moveDirection(angle, magnitude) { return new Point(Math.cos(angle) * magnitude, Math.sin(angle) * magnitude); }
-function sqrDistance(a, b) { return Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2); }
 function deg2rad(d) { return Math.PI / 180 * d; }
 function rad2deg(r) { return 180 / Math.PI * r; }
 function AABB(rectA, rectB) { return (rectA.x < rectB.x + rectB.width && rectA.x + rectA.width > rectB.x) && (rectA.y < rectB.y + rectB.height && rectA.y + rectA.height > rectB.y); }

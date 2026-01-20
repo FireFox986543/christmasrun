@@ -16,7 +16,7 @@ class MenuScene extends Scene {
         getSelectedUIElement();
         handleUIClicks();
     }
-    render(dt) {
+    render() {
         // Clear, Render background
         clearBuffer('lightblue')
 
@@ -28,28 +28,34 @@ class MenuScene extends Scene {
         ctx.miterLimit = 2;
         ctx.lineWidth = 48;
 
-        const baseY = VIRTUAL_HEIGHT / 4 + 60;
+        const transf = ctx.getTransform();
+        const scale = Math.sin(animationNow() * 3) / 20 + 1 + (1 / 20);
+        ctx.translate(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 4);
+        ctx.scale(scale, scale);
+        ctx.rotate(Math.sin(animationNow() * 2.8) * 0.0698); // 4 degrees
+        ctx.textBaseline = 'middle';
         // Render title 2 times, once the background stroke, then the letters themselves
         for (let j = 0; j < 2; j++) {
-            let startX = VIRTUAL_WIDTH / 2 - this.#totalTitleLength / 2;
+            let startX = -this.#totalTitleLength / 2;
             for (let i = 0; i < this.#titleText.length; i++) {
                 const char = this.#titleText[i];
-
-                if(char !== '') {
+                
+                if(char !== ' ') {
                     if(j === 0)
-                        ctx.strokeText(char, startX, this.#titleSine(3, 40, i / 3)+ baseY);
+                        ctx.strokeText(char, startX, this.#titleSine(3, 22, i / 3));
                     else {
-                        ctx.fillStyle = fraction(this.gameTime + i * 1.5) >= .5 ? this.#color2 : this.#color1;
-                        ctx.fillText(char, startX, this.#titleSine(3, 40, i / 3) + baseY - 4);
+                        ctx.fillStyle = fraction(animationNow() + i * 1.5) >= .5 ? this.#color2 : this.#color1;
+                        ctx.fillText(char, startX, this.#titleSine(3, 22, i / 3) - 4);
                     }
                 }
-
+                
                 startX += this.#letterLengths[i];
             }
         }
-
+        ctx.setTransform(transf);
+        
+        ctx.textBaseline = 'alphabetic';
         renderUIElements();
-
         /*ctx.fillStyle = 'black';
         ctx.font = '64px "Jersey 10"';
         ctx.fillText(`Element: ${this.uiElements.indexOf(selectedUIElement)} ${selectedUIElement}`, viewport.viewLeft + 20, 80);
@@ -77,16 +83,16 @@ class MenuScene extends Scene {
 
     onLoad() {
         this.#mainPanel = new UIPanel();
-        const playBtn = new UIButton(Point.zero, 'PLAY GAME', ButtonTypes.RedLarge, () => { this.#playBtnClick(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, ScaleAndRotateAnimation.apply, HoverFlyUpAnimation.apply);
+        const playBtn = new UIButton(Vector2.zero, 'PLAY GAME', ButtonTypes.RedLarge, () => { this.#playBtnClick(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, ScaleAndRotateAnimation.apply, HoverFlyUpAnimation.apply, StartFadeFlyUpAnimation.bind(.4, Vector2.up.multiply(120), false));
         playBtn.setParent(this.#mainPanel);
 
         this.#modeSelectorPanel = new UIPanel();
-        const smallWidth = UIAtlas.ButtonRedSmall.width * UIAtlas.ButtonRedSmall.scale + 20;
-        const smallHeight = UIAtlas.ButtonRedSmall.height * UIAtlas.ButtonRedSmall.scale;
-        const easyBtn = new UIButton(new Point(-smallWidth, 0), 'EASY', ButtonTypes.GreenSmall, () => { this.#playModeBtnClick(0); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply);
-        const normalBtn = new UIButton(new Point(0, 0), 'NORMAL', ButtonTypes.YellowSmall, () => { this.#playModeBtnClick(1); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply);
-        const hardBtn = new UIButton(new Point(smallWidth, 0), 'HARD', ButtonTypes.RedSmall, () => { this.#playModeBtnClick(2); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply);
-        const backBtn = new UIButton(new Point(0, smallHeight + 40), 'BACK', ButtonTypes.BlueLarge, () => { this.#backBtnClick(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply)
+        const smallWidth = getButtonSize(ButtonTypes.RedSmall).width + 20;
+        const smallHeight = getButtonSize(ButtonTypes.RedSmall).height;
+        const easyBtn = new UIButton(new Vector2(-smallWidth, 0), 'EASY', ButtonTypes.GreenSmall, () => { this.#playModeBtnClick(0); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply);
+        const normalBtn = new UIButton(new Vector2(0, 0), 'NORMAL', ButtonTypes.YellowSmall, () => { this.#playModeBtnClick(1); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply);
+        const hardBtn = new UIButton(new Vector2(smallWidth, 0), 'HARD', ButtonTypes.RedSmall, () => { this.#playModeBtnClick(2); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply);
+        const backBtn = new UIButton(new Vector2(0, smallHeight + 40), 'BACK', ButtonTypes.BlueLarge, () => { this.#backBtnClick(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply)
         this.#modeSelectorPanel.appendMultiple(easyBtn, normalBtn, hardBtn, backBtn);
         this.#modeSelectorPanel.setActive(false);
 
@@ -105,7 +111,7 @@ class MenuScene extends Scene {
         }
     }
 
-    #titleSine(frequency, amplitude, offset) { return Math.sin(offset + this.gameTime * frequency) * amplitude; }
+    #titleSine(frequency, amplitude, offset) { return Math.sin(offset + animationNow() * frequency) * amplitude; }
 
     #playBtnClick() {
         this.#mainPanel.setActive(false);

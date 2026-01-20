@@ -90,8 +90,11 @@ class UIButton extends UIElement {
     mouseOver = false
     hoverStart = 0;
     hoverEnd = 0;
+    activeTime = 0;
 
-    constructor(point, text, buttonType, clicked, horizontalAlign = 0, verticalAlign = 0, animation = null, hoverAnimation = null) {
+    get inStartAnimDuration() { return this.startAnimation !== null && animationNow() <= this.activeTime + this.startAnimation.duration; }
+
+    constructor(point, text, buttonType, clicked, horizontalAlign = 0, verticalAlign = 0, animation = null, hoverAnimation = null, startAnimation = null) {
         const button = UIAtlas[buttonType];
         super(new Rect(point.x, point.y, button.width * button.scale, button.height * button.scale), horizontalAlign, verticalAlign);
         this.text = text;
@@ -100,33 +103,59 @@ class UIButton extends UIElement {
         this.mouseOver = false;
         this.animation = animation;
         this.hoverAnimation = hoverAnimation;
+        this.startAnimation = startAnimation;
+        this.activeTime = animationNow();
     }
 
     render() {
-        if(this.hoverAnimation !== null)
-            // In the anim function we pass in this to refer to this ui element, it WON't return a new position (yet)
-            this.hoverAnimation(this);
+        let renderPoint = new Vector2(this.x, this.y);
 
-        let renderPoint = new Point(this.x, this.y);
+        if (this.startAnimation !== null && this.inStartAnimDuration) {
+            // Temporarly disable hovering effects by turning off selection for this element
+            this.selectable = false;
+            this.startAnimation.render(this);
+        }
+        else {
+            // Re-enable selection after the start animation is finished
+            this.selectable = true;
+
+            // Don't let hover effects play if playing start animations
+            if (this.hoverAnimation !== null)
+                // In the anim function we pass in this to refer to this ui element, it WON't return a new position (yet)
+                this.hoverAnimation(this);
+        }
 
         if (this.animation !== null)
             // In the anim function we pass in this to refer to this ui element, also it will return the new position after the animation
             renderPoint = this.animation(this);
 
         renderButton(UIAtlas[`${this.mouseOver ? "HL_" : ""}${this.buttonType}`], this.text, renderPoint.x, renderPoint.y);
+        ctx.globalAlpha = 1;
     }
 
     onMouseEnter() {
         pointerType = PointerTypes.HAND;
         this.mouseOver = true;
-        this.hoverStart = scene.gameTime;
+        this.hoverStart = animationNow();
     }
     onMouseExit() {
         pointerType = PointerTypes.POINTER;
         this.mouseOver = false;
-        this.hoverEnd = scene.gameTime;
+        this.hoverEnd = animationNow();
     }
     onMouseClick(btn) { this.clicked(btn); }
+
+    setShadowed(value) {
+        super.setShadowed(value);
+
+        if(this.startAnimation !== null && this.startAnimation.shadowingUpdates)
+            this.activeTime = value ? -1000 : animationNow();
+    }
+    setActive(value) {
+        super.setActive(value); // Handle normal logic
+
+        this.activeTime = value ? animationNow() : -1000;
+    }
 }
 class UIPanel extends UIElement {
     constructor() { super(Rect.identity); }
@@ -142,7 +171,12 @@ class UIText extends UIElement {
 
 function setPointer(pt) { pointerType = pt; }
 function renderPointer() {
-    ctx.drawImage(images['pointer' + pointerType.id], mousePosition.x - pointerType.hotspot.x, mousePosition.y - pointerType.hotspot.y, 100, 100);
+    const transf = ctx.getTransform();
+    const scale = Math.sin(animationNow() * 1.3) / 50 + 1 + (1 / 50);
+    ctx.translate(mousePosition.x - pointerType.hotspot.x, mousePosition.y - pointerType.hotspot.y)
+    ctx.scale(scale, scale);
+    ctx.drawImage(images['pointer' + pointerType.id], 0, 0, 100, 100);
+    ctx.setTransform(transf);
 }
 function renderButton(button, text, x, y) {
     ctx.drawImage(images[button.atlas], button.x, button.y, button.width, button.height, x, y, button.width * button.scale, button.height * button.scale);

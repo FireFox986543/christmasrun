@@ -90,9 +90,7 @@ class PlayerEntity extends Entity {
         this.deathAEnd = this.deathAStart + 1000;
         PlayerEntity.#deathFadeStart = Date.now() + 250;
 
-        setTimeout(() => {
-            scene.restartGame();
-        }, 3500);
+        scene.playerDied();
     }
 }
 
@@ -105,7 +103,7 @@ class ChainsawEnemy extends Entity {
     constructor(position, size) {
         super(position, size);
         this.rotation = 0;
-        this.impulse = new Point(0, 0);
+        this.impulse = new Vector2(0, 0);
         this.playerDistance = 0;
     }
 
@@ -125,18 +123,18 @@ class ChainsawEnemy extends Entity {
     }
 
     update(dt) {
-        this.rotation = angleTowards(scene.player.position, this.position);
-        let move = moveDirection(this.rotation, scene.difficulty.enemyStartSpeed * dt);
+        this.rotation = Vector2.angleTowards(this.position, scene.player.position);
+        let move = Vector2.fromAngle(this.rotation, scene.difficulty.enemyStartSpeed * dt);
         this.position.x += move.x + this.impulse.x;
         this.position.y += move.y + this.impulse.y;
 
-        this.playerDistance = sqrDistance(scene.player.position, this.position);
+        this.playerDistance = Vector2.sqrDistance(scene.player.position, this.position);
         if (this.playerDistance >= ChainsawEnemy.#removalDistance) {
             this.destroy();
             return;
         }
 
-        if (!this.impulse.equals(Point.zero)) {
+        if (!this.impulse.equals(Vector2.zero)) {
             let signX = Math.sign(this.impulse.x);
             let signY = Math.sign(this.impulse.y);
 
@@ -156,13 +154,13 @@ class ChainsawEnemy extends Entity {
 
             // The player only took damage, launch the enemy away from it
             if (!scene.player.dead)
-                this.impulse = moveDirection(ChainsawEnemy.flipRotation(this.rotation), ChainsawEnemy.#collisionImpulse);
+                this.impulse = Vector2.fromAngle(ChainsawEnemy.flipRotation(this.rotation), ChainsawEnemy.#collisionImpulse);
         }
     }
 
     render(dt, images, transf) {
         // Draw a single enemy
-        const center = new Point(this.screenX + this.size.width / 2, this.screenY + this.size.height / 2);
+        const center = new Vector2(this.screenX + this.size.width / 2, this.screenY + this.size.height / 2);
         ctx.translate(center.x, center.y); // Required to add half size, for center pivot
         let flip = Math.abs(this.rotation) >= Math.PI * 0.5 ? 1 : -1;
         if (this.playerDistance < 25) // Avoid back-to-back flickering when the enemy is at the same pos as the player
@@ -177,7 +175,7 @@ class ChainsawEnemy extends Entity {
         fillCircle(center.x - this.size.width / 2, center.y - this.size.height / 2, 3, 'green');
 
         fillCircle(center.x, center.y, 3, 'blue');
-        line(center, center.add(moveDirection(this.rotation, 120)), 'purple');
+        line(center, center.add(Vector2.fromAngle(this.rotation, 120)), 'purple');
         ctx.fillStyle = 'black';
         ctx.font = '22px Arial';
         ctx.fillText(this.rotation, center.x - 500, center.y);

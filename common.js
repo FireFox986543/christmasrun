@@ -1,20 +1,38 @@
-class Point {
-    static zero = new Point(0, 0);
-    static one = new Point(1, 1);
-    static up = new Point(0, 1);
-    static down = new Point(0, -1);
-    static left = new Point(-1, 0);
-    static right = new Point(1, 0);
+// I KNEW IT, that this "POINT" would come, heh-eh
+// So I made the points into vector2-s, like a normal game engine would have
+class Vector2 {
+    static zero = Object.freeze(new Vector2(0, 0));
+    static one = Object.freeze(new Vector2(1, 1));
+    static up = Object.freeze(new Vector2(0, 1));
+    static down = Object.freeze(new Vector2(0, -1));
+    static left = Object.freeze(new Vector2(-1, 0));
+    static right = Object.freeze(new Vector2(1, 0));
 
     constructor(x, y) {
         this.x = x;
         this.y = y;
     }
 
-    add(p) { return new Point(this.x + p.x, this.y + p.y); }
-    subtr(p) { return new Point(this.x - p.x, this.y - p.y); }
-    negate() { return new Point(-this.x, -this.y); }
+    add(p) { return new Vector2(this.x + p.x, this.y + p.y); }
+    subtr(p) { return new Vector2(this.x - p.x, this.y - p.y); }
+    negate() { return new Vector2(-this.x, -this.y); }
+    multiply(b) { return new Vector2(this.x * b, this.y * b); }
+    divide(b) { return new Vector2(this.x / b, this.y / b); }
     equals(p) { return this.x === p.x && this.y === p.y; }
+
+    get sqrMagnitude() { return this.x * this.x + this.y * this.y; }
+    get magnitude() { return Math.sqrt(this.sqrMagnitude); }
+
+    static distance(a, b) { return Math.sqrt(this.sqrDistance(a, b)); }
+    static sqrDistance(a, b) { return Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2); }
+
+    static angleTowards(a, b) { return Math.atan2(b.y - a.y, b.x - a.x); }
+    // NOTE: before it was called 'moveDirection', so replace that old knowledge with this more accurate name
+    static fromAngle(angle, magnitude) { return new Vector2(Math.cos(angle) * magnitude, Math.sin(angle) * magnitude); }
+    static normalize(a) {
+        const mag = a.magnitude;
+        return mag === 0 ? Vector2.zero : a.divide(mag);
+    }
 }
 class Size {
     static zero = new Size(0, 0);
@@ -48,6 +66,8 @@ class ClipRegion extends Rect {
         this.atlas = atlas;
         this.scale = scale;
     }
+
+    fullSize() { return new Size(this.width * this.scale, this.height * this.scale); }
 }
 const UIAtlas = Object.freeze({
     ButtonRedLarge: new ClipRegion(0, 0, 60, 10, 'ui_atlas', 10),
@@ -77,6 +97,7 @@ const ButtonTypes = Object.freeze({
     GreenLarge: 'ButtonGreenLarge',
     GreenSmall: 'ButtonGreenSmall',
 });
+function getButtonSize(btntype) { return UIAtlas[btntype].fullSize(); }
 
 class PointerType {
     constructor(id, hotspot) {
@@ -85,8 +106,8 @@ class PointerType {
     }
 }
 const PointerTypes = Object.freeze({
-    POINTER: new PointerType(1, new Point(11, 6)),
-    HAND: new PointerType(2, new Point(17, 3)),
+    POINTER: new PointerType(1, new Vector2(11, 6)),
+    HAND: new PointerType(2, new Vector2(17, 3)),
 });
 
 class ScaleAndRotateAnimation {
@@ -95,13 +116,13 @@ class ScaleAndRotateAnimation {
         // Ensure that the xy coordinates are at the button's center
         const x = e.x + e.width / 2;
         const y = e.y + e.height / 2;
-        const scale = Math.cos(scene.gameTime * speed) / scaleAmount + 1 + (1 / scaleAmount);
+        const scale = Math.cos(animationNow() * speed) / scaleAmount + 1 + (1 / scaleAmount);
 
         // We set the pivot point for the rotation to the center of the button
         ctx.translate(x, y);
-        ctx.rotate(Math.sin(scene.gameTime * (speed + .5)) * rotate);
+        ctx.rotate(Math.sin(animationNow() * (speed + .5)) * rotate);
         ctx.scale(scale, scale);
-        return new Point(-e.width / 2, -e.height / 2);
+        return new Vector2(-e.width / 2, -e.height / 2);
     }
     static bind(speed, rotate, scaleAmount) { return (e) => { return ScaleAndRotateAnimation.#handle(e, speed, rotate, scaleAmount); } };
 }
@@ -109,30 +130,39 @@ class HoverFlyUpAnimation {
     static apply = this.bind(.3, 16);
     static #handle(e, duration, amount) {
         if (e.mouseOver) {
-            const t = Math.min(1, (scene.gameTime - e.hoverStart) / duration);
+            const t = Math.min(1, (animationNow() - e.hoverStart) / duration);
             ctx.translate(0, -interpolateEaseIn(t, 3) * amount);
             return;
         }
         const hoverEnds = e.hoverEnd + duration
-        if (scene.gameTime <= hoverEnds) {
-            const t = Math.min(1, (hoverEnds - scene.gameTime) / duration);
+        if (animationNow() <= hoverEnds) {
+            const t = Math.min(1, (hoverEnds - animationNow()) / duration);
             ctx.translate(0, -interpolateEaseOut(t, 3) * amount);
         }
     }
     static bind(duration, amount) { return (e) => { HoverFlyUpAnimation.#handle(e, duration, amount); }; }
 }
-/*
-class Animation {
-    static apply() {
-        this.handle(1, 2, 3);
-    }   
-    static handle(one, two, three) {
-        anim; anim; anim; anim;
-        1 = one;
-        2 = two;
-        three = 3;
+class StartFadeFlyUpAnimation {
+    static apply = this.bind(.4, Vector2.up.multiply(120));
+    static #handle(e, duration, vector) {
+        // For this we could use the canvas translating, I may modify this to return a point instead in the future to replace the canvas transformations
+
+        // TODO: Make something similar to these animation classes for easing functions, eg: linear, ease in/out, quadratic, cubic etc.
+        // And more complex ones
+        // Also for waves, like sine, cosine, but more complex, that would produce more natural-looking animations
+
+        const t = interpolateEaseOut(Math.min(1, (animationNow() - e.activeTime) / duration), 3);
+        const newVector = vector.multiply(1 - t);
+        ctx.globalAlpha = t;
+        ctx.translate(newVector.x, newVector.y);
     }
-    static bindAnimation(one, two, three) {
-        return () => { Animation.handle.call(this, one, two, three); };
+    static bind(duration, vector, shadowingUpdates = true) {
+        return {
+            duration: duration,
+            shadowingUpdates: shadowingUpdates,
+            render: (e) => { StartFadeFlyUpAnimation.#handle(e, duration, vector); }
+        };
     }
-}*/
+}
+
+function animationNow() { return performance.now() / 1000; }

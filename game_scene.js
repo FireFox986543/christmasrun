@@ -1,4 +1,6 @@
 class ChaseGameScene extends Scene {
+    #diedUIContainer;
+
     constructor(difficultyLevel) {
         super();
 
@@ -19,6 +21,16 @@ class ChaseGameScene extends Scene {
     }
 
     gameLoop(dt) {
+        getSelectedUIElement();
+        handleUIClicks();
+
+        // We clicked the home button
+        if(scene !== this)
+            return;
+
+        if(getKeyDown(KeyCode.KeyP))
+            this.#diedUIContainer.setActive(!this.#diedUIContainer.isActive);
+
         if (getKeyDown(KeyCode.KeyF1))
             this.DEBUG = !this.DEBUG;
         if(getKeyDown(KeyCode.KeyI))
@@ -117,12 +129,12 @@ class ChaseGameScene extends Scene {
                 ctx.textAlign = 'right';
                 let x = viewport.viewRight - 20;
 
-                ctx.fillText(`Scene: ${scene.constructor.name}`, x, 50);
-                ctx.fillText(`Difficulty: ${this.difficultyLevel}`, x, 75);
-                ctx.fillText(`Gametime: ${this.gameTime.toFixed(2)}`, x, 100);
-                ctx.fillText(`Enemy spawn next: ${this.difficulty.nextSpawnIntvIncrease}`, x, 120);
-                ctx.fillText(`Enemy spawn rate: ${this.difficulty.enemySpawnInterval}`, x, 140);
-                ctx.fillText(`Enemy spawnrt inc: ${this.difficulty.enemySpawnIntvIncrInterval}`, x, 160);
+                ctx.fillText(`Scene: ${scene.constructor.name}`, x, 200);
+                ctx.fillText(`Difficulty: ${this.difficultyLevel}`, x, 225);
+                ctx.fillText(`Gametime: ${this.gameTime.toFixed(2)}`, x, 300);
+                ctx.fillText(`Enemy spawn next: ${this.difficulty.nextSpawnIntvIncrease}`, x, 320);
+                ctx.fillText(`Enemy spawn rate: ${this.difficulty.enemySpawnInterval}`, x, 340);
+                ctx.fillText(`Enemy spawnrt inc: ${this.difficulty.enemySpawnIntvIncrInterval}`, x, 360);
             }
 
             ctx.textAlign = 'left';
@@ -154,20 +166,26 @@ class ChaseGameScene extends Scene {
             let text = `HIGHEST:  ${this.player.highScore.toFixed(2)}`
             width = ctx.measureText(text).width;
 
-            outlinedText(VIRTUAL_WIDTH / 2 - width / 2, 120, 0, 2, text);
+            outlinedText(VIRTUAL_WIDTH / 2 - width / 2, 130, 0, 2, text);
         }
 
         // Render lives
         {
             const size = 48;
-            const y = 150;
+            const y = 160;
             const gap = 10;
             const startX = VIRTUAL_WIDTH / 2 - (this.player.maxLives * size + (this.player.maxLives - 1) * gap) / 2;
+            const remaining = this.player.maxLives - this.player.lives + 1;
 
             for (let i = 0; i < this.player.maxLives; i++) {
-                ctx.drawImage(images['ornament' + (i < this.player.lives ? '1' : '2')], startX + (size + gap) * i, y, size, size);
+                const active = i < this.player.lives;
+                const thisY = active ? y + Math.cos(animationNow() * 3 * remaining + i * 1.8) * 4 : y;
+                ctx.drawImage(images['ornament' + (active ? '1' : '2')], startX + (size + gap) * i, thisY, size, size);
             }
         }
+
+        this.#renderDifficulty();
+        ctx.textAlign = 'left';
 
         if (this.player.dead && Date.now() >= this.player.deathAStart) {
             ctx.font = "256px 'Jersey 10'";
@@ -183,6 +201,8 @@ class ChaseGameScene extends Scene {
             ctx.fillStyle = `rgba(255, 255, 255, ${t.toFixed(2)})`;
             outlinedText(x, y, 0, 5, text);
         }
+
+        renderUIElements();
 
         // Render mouse pointer
         renderPointer();
@@ -260,10 +280,13 @@ class ChaseGameScene extends Scene {
         this.entities.length = 0;
         this.scrollX = 0;
         this.scrollY = 0;
+        this.horizontal = 0;
+        this.vertical = 0;
         timeScale = 1;
         this.gameTime = 0;
         this.resetDifficulties();
         this.difficulty = this.difficulties[this.difficultyLevel];
+        this.#diedUIContainer.setActive(false);
 
         // Keep highscore across multiple restarts
         let highScore = this.player === undefined ? 0 : this.player.highScore;
@@ -275,8 +298,13 @@ class ChaseGameScene extends Scene {
         this.spawnPlayer();
         this.player.highScore = highScore;
     }
+    playerDied() {
+        setTimeout(() => {
+            this.#diedUIContainer.setActive(true);
+        }, 2000);
+    }
     spawnPlayer() {
-        this.player = new PlayerEntity(new Point(0, 0), new Size(230, 230), 200);
+        this.player = new PlayerEntity(new Vector2(0, 0), new Size(230, 230), 200);
         this.entities.push(this.player);
     }
     spawnEnemies(amount, scatter, nsW, nsH) {
@@ -290,18 +318,53 @@ class ChaseGameScene extends Scene {
                 continue;
             }
 
-            this.entities.push(new ChainsawEnemy(new Point(x, y), new Size(200, 200)));
+            this.entities.push(new ChainsawEnemy(new Vector2(x, y), new Size(200, 200)));
         }
     }
     spawnEnemyAround() {
         const angle = Math.random() * Math.PI * 2;
-        const point = moveDirection(angle, Math.max(VIRTUAL_WIDTH, VIRTUAL_HEIGHT) + this.difficulty.enemySpawnDistance);
+        const point = Vector2.fromAngle(angle, Math.max(VIRTUAL_WIDTH, VIRTUAL_HEIGHT) + this.difficulty.enemySpawnDistance);
 
         // Spawn enemies relative to player -> add player pos to position
         this.entities.push(new ChainsawEnemy(this.player.position.add(point), new Size(200, 200)));
     }
 
+    #renderDifficulty() {
+        let text;
+        ctx.strokeStyle = 'white';
+        switch(this.difficultyLevel) {
+            case 0:
+                ctx.fillStyle = '#74f00f';
+                text = 'EASY';
+                break;
+            case 2:
+                ctx.fillStyle = '#ed120b';
+                text = 'HARD';
+                break;
+            default: 
+                ctx.fillStyle = '#ffb700';
+                text = 'NORMAL';
+                break;
+        }
+
+        ctx.textAlign = 'right';
+        ctx.font = '128px "Jersey 10"';
+        ctx.lineWidth = 22;
+        outlinedText(viewport.viewRight - 20, 96, 0, 4, text);
+    }
+
     onLoad() {
+        this.#diedUIContainer = new UIPanel();
+        const smallWidth = getButtonSize(ButtonTypes.RedSmall).width / 2 + 60;
+        const y = 100;
+        const startAnim = StartFadeFlyUpAnimation.bind(.6, Vector2.up.multiply(200));
+        const restartBtn = new UIButton(new Vector2(-smallWidth, y), 'RESTART', ButtonTypes.RedSmall, () => { this.restartGame(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply, startAnim);
+        const homeBtn = new UIButton(new Vector2(smallWidth, y), 'HOME', ButtonTypes.BlueSmall, () => { loadScene(new MenuScene()); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply, startAnim);
+
+        this.#diedUIContainer.appendMultiple(restartBtn, homeBtn);
+        this.#diedUIContainer.setActive(false);
+        this.uiElements.push(this.#diedUIContainer, restartBtn, homeBtn);
+
         this.restartGame();
     }
 }

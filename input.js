@@ -13,7 +13,7 @@ const mouseButtons = {
     3: new KeyPress(false, true),
     4: new KeyPress(false, true),
 };
-const mousePosition = new Point(0, -1000);
+const mousePosition = new Vector2(0, -1000);
 
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener('keydown', function (e) {
