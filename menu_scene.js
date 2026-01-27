@@ -4,6 +4,7 @@ class MenuScene extends Scene {
     #titleText = 'Christmas  RUN'
     #color1 = '#de291f'
     #color2 = '#159741'
+    #sceneStart;
 
     #mainPanel;
     #modeSelectorPanel;
@@ -20,6 +21,8 @@ class MenuScene extends Scene {
         // Clear, Render background
         clearBuffer('lightblue')
 
+        ctx.globalAlpha = Math.min(1, (animationNow() - this.#sceneStart) / .3);
+
         ctx.font = '256px "Jersey 10"';
         ctx.fillStyle = '#de291f';
         ctx.strokeStyle = 'white';
@@ -32,7 +35,7 @@ class MenuScene extends Scene {
         const scale = Math.sin(animationNow() * 3) / 20 + 1 + (1 / 20);
         ctx.translate(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 4);
         ctx.scale(scale, scale);
-        ctx.rotate(Math.sin(animationNow() * 2.8) * 0.0698); // 4 degrees
+        ctx.rotate(Math.sin(animationNow() * 2.8) * (Math.cos(animationNow() * 3 + 10) * 0.5) * Math.sin(animationNow() * 1.4) * 0.0698); // 4 degrees
         ctx.textBaseline = 'middle';
         // Render title 2 times, once the background stroke, then the letters themselves
         for (let j = 0; j < 2; j++) {
@@ -44,7 +47,7 @@ class MenuScene extends Scene {
                     if(j === 0)
                         ctx.strokeText(char, startX, this.#titleSine(3, 22, i / 3));
                     else {
-                        ctx.fillStyle = fraction(animationNow() + i * 1.5) >= .5 ? this.#color2 : this.#color1;
+                        ctx.fillStyle = fraction(animationNow() * 0.5 + i * 1.5) >= .5 ? this.#color2 : this.#color1;
                         ctx.fillText(char, startX, this.#titleSine(3, 22, i / 3) - 4);
                     }
                 }
@@ -109,6 +112,8 @@ class MenuScene extends Scene {
             this.#letterLengths.push(m);
             this.#totalTitleLength += m;
         }
+
+        this.#sceneStart = animationNow();
     }
 
     #titleSine(frequency, amplitude, offset) { return Math.sin(offset + animationNow() * frequency) * amplitude; }

@@ -54,7 +54,7 @@ class PlayerEntity extends Entity {
         if (!this.dead && this.isImmune && fraction(this.immune * 4) > .5)
             ctx.globalAlpha = .3;
         if (this.dead) {
-            const t = Math.min(1, (Date.now() - PlayerEntity.#deathFadeStart) / (this.deathAEnd - PlayerEntity.#deathFadeStart));
+            const t = Math.min(1, (animationNow() - PlayerEntity.#deathFadeStart) / (this.deathAEnd - PlayerEntity.#deathFadeStart));
             ctx.globalAlpha = Math.pow(1 - t, 4);
         }
 
@@ -86,9 +86,9 @@ class PlayerEntity extends Entity {
         this.highScore = Math.max(this.highScore, this.score);
         this.dead = true;
         this.immune = 1 / 0;
-        this.deathAStart = Date.now() + 1500;
-        this.deathAEnd = this.deathAStart + 1000;
-        PlayerEntity.#deathFadeStart = Date.now() + 250;
+        this.deathAStart = animationNow() + 1.5;
+        this.deathAEnd = this.deathAStart + 1;
+        PlayerEntity.#deathFadeStart = animationNow() + .25;
 
         scene.playerDied();
     }

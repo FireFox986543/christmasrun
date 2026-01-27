@@ -25,15 +25,15 @@ class ChaseGameScene extends Scene {
         handleUIClicks();
 
         // We clicked the home button
-        if(scene !== this)
+        if (scene !== this)
             return;
 
-        if(getKeyDown(KeyCode.KeyP))
+        if (getKeyDown(KeyCode.KeyP))
             this.#diedUIContainer.setActive(!this.#diedUIContainer.isActive);
 
         if (getKeyDown(KeyCode.KeyF1))
             this.DEBUG = !this.DEBUG;
-        if(getKeyDown(KeyCode.KeyI))
+        if (getKeyDown(KeyCode.KeyI))
             this.player.lives = 100000;
 
         if (timeScale === 0)
@@ -83,18 +83,18 @@ class ChaseGameScene extends Scene {
 
         ChainsawEnemy.staticUpdate(dt);
 
-        for(let i = 0; i < this.entities.length; i++)
+        for (let i = 0; i < this.entities.length; i++)
             this.entities[i].update(dt);
 
-        this.scrollX += (this.player.position.x - this.scrollX) * .2;
-        this.scrollY += (this.player.position.y - this.scrollY) * .2;
+        this.scrollX += (this.player.position.x - this.scrollX) * 0.2;
+        this.scrollY += (this.player.position.y - this.scrollY) * 0.2;
 
         if (!this.player.isImmune)
             this.player.score += dt;
     }
     render(dt) {
         // Clear, Render background
-        clearBuffer('#86d5f7')
+        clearBuffer('#6cbaf3');
 
         // Render xy axis lines
         if (this.DEBUG) {
@@ -108,6 +108,42 @@ class ChaseGameScene extends Scene {
             ctx.moveTo(viewport.viewLeft, translateY());
             ctx.lineTo(viewport.viewLeft + viewport.visibleWidth, translateY());
             ctx.stroke()
+        }
+
+        {
+            // TODO: solve stitching issues
+            // Render backgrounds, No explaining,
+            // Just to know, didn't take that long, hehe ;)
+            // Just a handful of hours to figure it out on my own — I already did this on another project
+            const renderSize = 1024;
+            const sourceSize = 256
+            let startX = viewport.viewLeft - revTranslateX(viewport.viewLeft) % renderSize;
+            let cellX = Math.floor(revTranslateX(viewport.viewLeft) / renderSize);
+            let startY = viewport.viewTop - revTranslateY(viewport.viewTop) % renderSize;
+            let cellY = Math.floor(revTranslateY(viewport.viewTop) / renderSize);
+            if (this.scrollX <= viewport.visibleWidth2)
+                startX -= renderSize;
+            if (this.scrollY <= viewport.visibleHeight2)
+                startY -= renderSize;
+
+            const visibleFirstX = renderSize - (viewport.viewLeft - startX);
+            const amountX = Math.ceil((viewport.visibleWidth - visibleFirstX) / renderSize) + 1;
+            const visibleFirstY = renderSize - (viewport.viewTop - startY);
+            const amountY = Math.ceil((viewport.visibleHeight - visibleFirstY) / renderSize) + 1;
+
+            ctx.font = '24px "Jersey 10"';
+            ctx.fillStyle = 'black';
+
+            for (let y = 0; y < amountY; y++) {
+                for (let x = 0; x < amountX; x++) {
+                    const drawX = Math.ceil(startX + renderSize * x);
+                    const drawY = Math.ceil(startY + renderSize * y);
+                    const tileX = ((cellX + x) % 4 + 4) % 4;
+                    const tileY = ((cellY + y) % 4 + 4) % 4;
+                    ctx.drawImage(images['grid'], tileX * sourceSize, tileY * sourceSize, sourceSize, sourceSize , drawX, drawY, renderSize, renderSize);
+                    //ctx.fillText(cellX + x, drawX, startY + renderSize * (y + .5));
+                }
+            }
         }
 
         // Render entities
@@ -187,12 +223,12 @@ class ChaseGameScene extends Scene {
         this.#renderDifficulty();
         ctx.textAlign = 'left';
 
-        if (this.player.dead && Date.now() >= this.player.deathAStart) {
+        if (this.player.dead && animationNow() >= this.player.deathAStart) {
             ctx.font = "256px 'Jersey 10'";
             let text = 'YOU  DIED!';
             let width = ctx.measureText(text).width;
 
-            let t = Math.min(1, (Date.now() - this.player.deathAStart) / (this.player.deathAEnd - this.player.deathAStart));
+            let t = Math.min(1, (animationNow() - this.player.deathAStart) / (this.player.deathAEnd - this.player.deathAStart));
             let y = VIRTUAL_HEIGHT / 2 - interpolateEaseIn(t, 4) * 100;
             let x = VIRTUAL_WIDTH / 2 - width / 2;
 
@@ -332,7 +368,7 @@ class ChaseGameScene extends Scene {
     #renderDifficulty() {
         let text;
         ctx.strokeStyle = 'white';
-        switch(this.difficultyLevel) {
+        switch (this.difficultyLevel) {
             case 0:
                 ctx.fillStyle = '#74f00f';
                 text = 'EASY';
@@ -341,7 +377,7 @@ class ChaseGameScene extends Scene {
                 ctx.fillStyle = '#ed120b';
                 text = 'HARD';
                 break;
-            default: 
+            default:
                 ctx.fillStyle = '#ffb700';
                 text = 'NORMAL';
                 break;

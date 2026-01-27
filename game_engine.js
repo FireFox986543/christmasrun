@@ -76,6 +76,7 @@ async function requestImages() {
         'ornament1': 'src/ornament.png',
         'ornament2': 'src/ornamentDark.png',
         'ui_atlas': 'src/ui_atlas.png',
+        'grid': 'src/bg1.png',
     }
     let loaded = 0;
 
