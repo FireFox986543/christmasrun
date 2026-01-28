@@ -8,20 +8,79 @@ class MenuScene extends Scene {
 
     #mainPanel;
     #modeSelectorPanel;
+    #playerDir = randomDir();
+    #targetDir = randomDir();
+    #nextDirChange = 0;
+    #nextEnemySpawn = 0;
 
     constructor() {
         super();
+
+        this.scrollX = 0;
+        this.scrollY = 0;
+
+        this.difficulty = { // Normal
+            startEnemies: 20, // How many enemies will spawn by default on game start
+            startEnemiesScatter: 2000, // Scattering of starting enemies
+            nextEnemySpawn: 10,
+            enemySpawnInterval: .4, // Every this interval an enemy will spawn
+            enemySpawnIntervalMin: .18, // The minimum interval for enemy spawns
+            enemySpawnDistance: 300, // Distance from player to spawn enemies outside of the screen
+            nextSpawnIntvIncrease: 10,
+            enemySpawnIntvIncrInterval: 6,  // Every this interval the enemySpawnInterval will change
+            enemySpawnIntvIncrAmount: 0.05, // enemySpawnInterval will change by this amount
+            playerImmuneDuration: 3,
+            playerMaxLives: 3,
+            enemyStartSpeed: 60,
+            enemyMaxSpeed: 100,
+            enemySpeedIncrementInterval: 10,
+            enemySpeedIncrementAmount: 8, // Enemies' speed changes by this every interval
+            enemySpeedAmountChangeScale: .95, // enemySpeedIncrementAmount scales by this every speed change
+            enemyNextSpeedIncrease: 12,
+            enemyCollisionRadius: 150,
+            enemyCollisionRadiusSquared: 150 * 150, // Squared distance in enemies will collide with the player
+        }
     }
 
-    gameLoop() {
+    gameLoop(dt) {
         getSelectedUIElement();
         handleUIClicks();
+
+        if(getKey(KeyCode.KeySpace))
+            dt *= 10;
+
+        const move = Vector2.fromAngle(this.#playerDir, 300);
+        this.player.position.x += move.x * dt;
+        this.player.position.y += move.y * dt;
+
+        this.scrollX += (this.player.position.x - this.scrollX) * 0.2;
+        this.scrollY += (this.player.position.y - this.scrollY) * 0.2;
+
+        if(this.gameTime >= this.#nextEnemySpawn) {
+            this.spawnEnemyAround();
+            this.#nextEnemySpawn += .2;
+        }
+
+        for (let i = 0; i < this.entities.length; i++)
+            this.entities[i].update(dt);
+
+        if(this.gameTime >= this.#nextDirChange) {
+            this.#targetDir = Math.random() * Math.PI * 2;
+            this.#nextDirChange += Math.random() + 1;
+        }
+
+        this.#playerDir += (this.#targetDir - this.#playerDir) * .01;
     }
-    render() {
+    render(dt) {
         // Clear, Render background
         clearBuffer('lightblue')
 
-        ctx.globalAlpha = Math.min(1, (animationNow() - this.#sceneStart) / .3);
+        renderBackground();
+
+        globalAlpha = Math.min(1, (animationNow() - this.#sceneStart) / .3);
+        ctx.globalAlpha = scaleAlpha(1);
+        
+        renderEntities(dt);
 
         ctx.font = '256px "Jersey 10"';
         ctx.fillStyle = '#de291f';
@@ -33,7 +92,7 @@ class MenuScene extends Scene {
 
         const transf = ctx.getTransform();
         const scale = Math.sin(animationNow() * 3) / 20 + 1 + (1 / 20);
-        ctx.translate(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 4);
+        ctx.translate(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 5);
         ctx.scale(scale, scale);
         ctx.rotate(Math.sin(animationNow() * 2.8) * (Math.cos(animationNow() * 3 + 10) * 0.5) * Math.sin(animationNow() * 1.4) * 0.0698); // 4 degrees
         ctx.textBaseline = 'middle';
@@ -42,21 +101,21 @@ class MenuScene extends Scene {
             let startX = -this.#totalTitleLength / 2;
             for (let i = 0; i < this.#titleText.length; i++) {
                 const char = this.#titleText[i];
-                
-                if(char !== ' ') {
-                    if(j === 0)
+
+                if (char !== ' ') {
+                    if (j === 0)
                         ctx.strokeText(char, startX, this.#titleSine(3, 22, i / 3));
                     else {
                         ctx.fillStyle = fraction(animationNow() * 0.5 + i * 1.5) >= .5 ? this.#color2 : this.#color1;
                         ctx.fillText(char, startX, this.#titleSine(3, 22, i / 3) - 4);
                     }
                 }
-                
+
                 startX += this.#letterLengths[i];
             }
         }
         ctx.setTransform(transf);
-        
+
         ctx.textBaseline = 'alphabetic';
         renderUIElements();
         /*ctx.fillStyle = 'black';
@@ -86,16 +145,18 @@ class MenuScene extends Scene {
 
     onLoad() {
         this.#mainPanel = new UIPanel();
-        const playBtn = new UIButton(Vector2.zero, 'PLAY GAME', ButtonTypes.RedLarge, () => { this.#playBtnClick(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, ScaleAndRotateAnimation.apply, HoverFlyUpAnimation.apply, StartFadeFlyUpAnimation.bind(.4, Vector2.up.multiply(120), false));
+        const playBtn = new UIButton(new Vector2(0, 120), 'PLAY GAME', ButtonTypes.RedLarge, () => { this.#playBtnClick(); }, HorizontalAlign.CENTER, VerticalAlign.BOTTOM, ScaleAndRotateAnimation.apply, HoverFlyUpAnimation.apply, StartFadeFlyUpAnimation.bind(.4, Vector2.up.multiply(120), false));
         playBtn.setParent(this.#mainPanel);
 
         this.#modeSelectorPanel = new UIPanel();
+        const hoverFUA = HoverFlyUpAnimation.apply;
+        const hoverAnim = o => HoverAnimation.bind(1, 3, o);
         const smallWidth = getButtonSize(ButtonTypes.RedSmall).width + 20;
         const smallHeight = getButtonSize(ButtonTypes.RedSmall).height;
-        const easyBtn = new UIButton(new Vector2(-smallWidth, 0), 'EASY', ButtonTypes.GreenSmall, () => { this.#playModeBtnClick(0); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply);
-        const normalBtn = new UIButton(new Vector2(0, 0), 'NORMAL', ButtonTypes.YellowSmall, () => { this.#playModeBtnClick(1); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply);
-        const hardBtn = new UIButton(new Vector2(smallWidth, 0), 'HARD', ButtonTypes.RedSmall, () => { this.#playModeBtnClick(2); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply);
-        const backBtn = new UIButton(new Vector2(0, smallHeight + 40), 'BACK', ButtonTypes.BlueLarge, () => { this.#backBtnClick(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply)
+        const easyBtn = new UIButton(new Vector2(-smallWidth, 140), 'EASY', ButtonTypes.GreenSmall, () => { this.#playModeBtnClick(0); }, HorizontalAlign.CENTER, VerticalAlign.BOTTOM, hoverAnim(-8), hoverFUA);
+        const normalBtn = new UIButton(new Vector2(0, 140), 'NORMAL', ButtonTypes.YellowSmall, () => { this.#playModeBtnClick(1); }, HorizontalAlign.CENTER, VerticalAlign.BOTTOM, hoverAnim(0), hoverFUA);
+        const hardBtn = new UIButton(new Vector2(smallWidth, 140), 'HARD', ButtonTypes.RedSmall, () => { this.#playModeBtnClick(2); }, HorizontalAlign.CENTER, VerticalAlign.BOTTOM, hoverAnim(8), hoverFUA);
+        const backBtn = new UIButton(new Vector2(0, smallHeight - 80), 'BACK', ButtonTypes.BlueLarge, () => { this.#backBtnClick(); }, HorizontalAlign.CENTER, VerticalAlign.BOTTOM, hoverAnim(0), hoverFUA)
         this.#modeSelectorPanel.appendMultiple(easyBtn, normalBtn, hardBtn, backBtn);
         this.#modeSelectorPanel.setActive(false);
 
@@ -114,6 +175,11 @@ class MenuScene extends Scene {
         }
 
         this.#sceneStart = animationNow();
+
+        this.player = new PlayerEntity(new Vector2(0, 0), new Size(230, 230), 200);
+        this.player.maxLives = 1 / 0; // The player is essentially invulnerable
+        this.player.lives = 1 / 0;
+        this.entities.push(this.player);
     }
 
     #titleSine(frequency, amplitude, offset) { return Math.sin(offset + animationNow() * frequency) * amplitude; }
@@ -127,6 +193,13 @@ class MenuScene extends Scene {
         this.#modeSelectorPanel.setActive(false);
     }
     #playModeBtnClick(diff) { loadScene(new ChaseGameScene(diff)); }
+
+    spawnEnemyAround() {
+        const point = Vector2.fromAngle(randomDir(), Math.max(VIRTUAL_WIDTH, VIRTUAL_HEIGHT));
+
+        // Spawn enemies relative to player -> add player pos to position
+        this.entities.push(new ChainsawEnemy(this.player.position.add(point), new Size(200, 200)));
+    }
 
     /*renderNode(x, y, n) {
         const size = 8;

@@ -52,14 +52,14 @@ class PlayerEntity extends Entity {
     }
     render(dt, images) {
         if (!this.dead && this.isImmune && fraction(this.immune * 4) > .5)
-            ctx.globalAlpha = .3;
+            ctx.globalAlpha = scaleAlpha(.3);
         if (this.dead) {
             const t = Math.min(1, (animationNow() - PlayerEntity.#deathFadeStart) / (this.deathAEnd - PlayerEntity.#deathFadeStart));
-            ctx.globalAlpha = Math.pow(1 - t, 4);
+            ctx.globalAlpha = scaleAlpha(Math.pow(1 - t, 4));
         }
 
         ctx.drawImage(images['player'], this.screenX, this.screenY, this.size.width, this.size.height);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = scaleAlpha(1);
 
         if (!scene.DEBUG) return;
         let screenPosition = translatePoint(this.position);

@@ -10,6 +10,7 @@ window.addEventListener("resize", resizeCanvas);
 
 let lastTick = 0;
 let timeScale = 1;
+let globalAlpha = 1;
 
 const VIRTUAL_WIDTH = 1920;
 const VIRTUAL_HEIGHT = 1080;
@@ -106,8 +107,10 @@ function loop() {
         lastTick = performance.now();
 
         try {
-            scene.gameLoop(dt);
-            scene.render(dt);
+            if (scene !== null)
+                scene.gameLoop(dt);
+            if (scene !== null)
+                scene.render(dt);
 
             processKeys();
             scene.gameTime += dt;
@@ -117,6 +120,7 @@ function loop() {
         }
     }
 
+    end:
     requestAnimationFrame(loop);
 }
 
@@ -146,8 +150,10 @@ function loadScene(sc) {
     scene.onLoad();
 }
 function unloadScene() {
-    if (scene !== null)
+    if (scene !== null) {
+        scene.entities.length = 0;
         scene.onUnload();
+    }
 
     _lastSelectedElement = null;
     selectedUIElement = null;
@@ -157,6 +163,7 @@ function unloadScene() {
 
 // Transformation functions
 
+function lerp(a, b, t) { return a + (b - a) * t; }
 function interpolateEaseIn(t, s) { return 1 - Math.pow(1 - t, s); }
 function interpolateEaseOut(t, s) { return Math.pow(t, s); }
 // Translate world space -> screen space
@@ -175,6 +182,7 @@ function isCulled(point, size) {
     return point.x + size.width / 2 < viewport.viewLeft || point.x - size.width / 2 > viewport.viewLeft + viewport.visibleWidth ||
         point.y + size.height / 2 < viewport.viewTop || point.y - size.height / 2 > viewport.viewTop + viewport.visibleHeight;
 }
+function randomDir() { return Math.random() * Math.PI * 2; }
 
 function arrayRemove(array, target) { array.splice(array.indexOf(target), 1); }
 
@@ -238,7 +246,7 @@ function renderUIElements() {
     const transf = ctx.getTransform();
     for (let i = 0; i < scene.uiElements.length; i++) {
         const e = scene.uiElements[i];
-        if(e.isActive) {
+        if (e.isActive) {
             e.render();
             ctx.setTransform(transf); // Reset the transform after every ui element
         }
@@ -248,3 +256,5 @@ function renderUIElements() {
     ctx.strokeStyle = strokeStyle;
     ctx.textBaseline = textBaseline;
 }
+
+function scaleAlpha(alpha) { return alpha * globalAlpha; }

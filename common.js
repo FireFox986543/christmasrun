@@ -126,6 +126,14 @@ class ScaleAndRotateAnimation {
     }
     static bind(speed, rotate, scaleAmount) { return (e) => { return ScaleAndRotateAnimation.#handle(e, speed, rotate, scaleAmount); } };
 }
+class HoverAnimation {
+    static apply = this.bind(1, 3, 0);
+    static #handle(e, speed, amount, offset) {
+        ctx.translate(0, Math.sin(animationNow() * speed + offset) * amount);
+        return new Vector2(e.x, e.y);
+    }
+    static bind(speed, amount, offset) { return (e) => { return HoverAnimation.#handle(e, speed, amount, offset); } };
+}
 class HoverFlyUpAnimation {
     static apply = this.bind(.3, 16);
     static #handle(e, duration, amount) {
@@ -153,7 +161,7 @@ class StartFadeFlyUpAnimation {
 
         const t = interpolateEaseOut(Math.min(1, (animationNow() - e.activeTime) / duration), 3);
         const newVector = vector.multiply(1 - t);
-        ctx.globalAlpha = t;
+        ctx.globalAlpha = scaleAlpha(t);
         ctx.translate(newVector.x, newVector.y);
     }
     static bind(duration, vector, shadowingUpdates = true) {
@@ -162,6 +170,42 @@ class StartFadeFlyUpAnimation {
             shadowingUpdates: shadowingUpdates,
             render: (e) => { StartFadeFlyUpAnimation.#handle(e, duration, vector); }
         };
+    }
+}
+
+function renderBackground() {
+    // Render backgrounds, No explaining,
+    // Just to know, didn't take that long, hehe ;)
+    // Just a handful of hours to figure it out on my own — I already did this on another project
+    const renderSize = 1024;
+    const sourceSize = 256
+    let startX = viewport.viewLeft - revTranslateX(viewport.viewLeft) % renderSize;
+    let cellX = Math.floor(revTranslateX(viewport.viewLeft) / renderSize);
+    let startY = viewport.viewTop - revTranslateY(viewport.viewTop) % renderSize;
+    let cellY = Math.floor(revTranslateY(viewport.viewTop) / renderSize);
+    if (scene.scrollX <= viewport.visibleWidth2)
+        startX -= renderSize;
+    if (scene.scrollY <= viewport.visibleHeight2)
+        startY -= renderSize;
+
+    const visibleFirstX = renderSize - (viewport.viewLeft - startX);
+    const amountX = Math.ceil((viewport.visibleWidth - visibleFirstX) / renderSize) + 1;
+    const visibleFirstY = renderSize - (viewport.viewTop - startY);
+    const amountY = Math.ceil((viewport.visibleHeight - visibleFirstY) / renderSize) + 1;
+
+    ctx.font = '24px "Jersey 10"';
+    ctx.fillStyle = 'black';
+    ctx.globalAlpha = 1; // Note, we don't care about the scaled alpha, as the background must be opaque!!!
+
+    for (let y = 0; y < amountY; y++) {
+        for (let x = 0; x < amountX; x++) {
+            const drawX = Math.ceil(startX + renderSize * x);
+            const drawY = Math.ceil(startY + renderSize * y);
+            const tileX = ((cellX + x) % 4 + 4) % 4;
+            const tileY = ((cellY + y) % 4 + 4) % 4;
+            ctx.drawImage(images['grid'], tileX * sourceSize, tileY * sourceSize, sourceSize, sourceSize, drawX, drawY, renderSize + 1, renderSize + 1); // Overdraw just 1 px to fix stitching issues, it's gone now
+            //ctx.fillText(cellX + x, drawX, startY + renderSize * (y + .5));
+        }
     }
 }
 

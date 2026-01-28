@@ -1,5 +1,6 @@
 class ChaseGameScene extends Scene {
     #diedUIContainer;
+    #sceneStart;
 
     constructor(difficultyLevel) {
         super();
@@ -93,8 +94,8 @@ class ChaseGameScene extends Scene {
             this.player.score += dt;
     }
     render(dt) {
-        // Clear, Render background
-        clearBuffer('#6cbaf3');
+        // Clear
+        clearBuffer('#6cc2ff');
 
         // Render xy axis lines
         if (this.DEBUG) {
@@ -110,41 +111,10 @@ class ChaseGameScene extends Scene {
             ctx.stroke()
         }
 
-        {
-            // TODO: solve stitching issues
-            // Render backgrounds, No explaining,
-            // Just to know, didn't take that long, hehe ;)
-            // Just a handful of hours to figure it out on my own — I already did this on another project
-            const renderSize = 1024;
-            const sourceSize = 256
-            let startX = viewport.viewLeft - revTranslateX(viewport.viewLeft) % renderSize;
-            let cellX = Math.floor(revTranslateX(viewport.viewLeft) / renderSize);
-            let startY = viewport.viewTop - revTranslateY(viewport.viewTop) % renderSize;
-            let cellY = Math.floor(revTranslateY(viewport.viewTop) / renderSize);
-            if (this.scrollX <= viewport.visibleWidth2)
-                startX -= renderSize;
-            if (this.scrollY <= viewport.visibleHeight2)
-                startY -= renderSize;
+        renderBackground();
 
-            const visibleFirstX = renderSize - (viewport.viewLeft - startX);
-            const amountX = Math.ceil((viewport.visibleWidth - visibleFirstX) / renderSize) + 1;
-            const visibleFirstY = renderSize - (viewport.viewTop - startY);
-            const amountY = Math.ceil((viewport.visibleHeight - visibleFirstY) / renderSize) + 1;
-
-            ctx.font = '24px "Jersey 10"';
-            ctx.fillStyle = 'black';
-
-            for (let y = 0; y < amountY; y++) {
-                for (let x = 0; x < amountX; x++) {
-                    const drawX = Math.ceil(startX + renderSize * x);
-                    const drawY = Math.ceil(startY + renderSize * y);
-                    const tileX = ((cellX + x) % 4 + 4) % 4;
-                    const tileY = ((cellY + y) % 4 + 4) % 4;
-                    ctx.drawImage(images['grid'], tileX * sourceSize, tileY * sourceSize, sourceSize, sourceSize , drawX, drawY, renderSize, renderSize);
-                    //ctx.fillText(cellX + x, drawX, startY + renderSize * (y + .5));
-                }
-            }
-        }
+        globalAlpha = interpolateEaseOut(Math.min(1, (animationNow() - this.#sceneStart) / .3), 4);
+        ctx.globalAlpha = scaleAlpha(1);
 
         // Render entities
         const culled = renderEntities(dt);
@@ -327,12 +297,15 @@ class ChaseGameScene extends Scene {
         // Keep highscore across multiple restarts
         let highScore = this.player === undefined ? 0 : this.player.highScore;
 
+        this.spawnPlayer();
+
         if (this.enemySpawning)
             this.spawnEnemies(this.difficulty.startEnemies, this.difficulty.startEnemiesScatter, 400, 400);
 
         //entities.push(new ChainsawEnemy(new Point(200, 200), new Size(200, 200), 0));
-        this.spawnPlayer();
         this.player.highScore = highScore;
+
+        this.#sceneStart = animationNow();
     }
     playerDied() {
         setTimeout(() => {
@@ -358,8 +331,7 @@ class ChaseGameScene extends Scene {
         }
     }
     spawnEnemyAround() {
-        const angle = Math.random() * Math.PI * 2;
-        const point = Vector2.fromAngle(angle, Math.max(VIRTUAL_WIDTH, VIRTUAL_HEIGHT) + this.difficulty.enemySpawnDistance);
+        const point = Vector2.fromAngle(randomDir(), Math.max(VIRTUAL_WIDTH, VIRTUAL_HEIGHT) + this.difficulty.enemySpawnDistance);
 
         // Spawn enemies relative to player -> add player pos to position
         this.entities.push(new ChainsawEnemy(this.player.position.add(point), new Size(200, 200)));

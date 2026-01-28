@@ -130,7 +130,7 @@ class UIButton extends UIElement {
             renderPoint = this.animation(this);
 
         renderButton(UIAtlas[`${this.mouseOver ? "HL_" : ""}${this.buttonType}`], this.text, renderPoint.x, renderPoint.y);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = scaleAlpha(1);
     }
 
     onMouseEnter() {
@@ -175,6 +175,7 @@ function renderPointer() {
     const scale = Math.sin(animationNow() * 1.3) / 50 + 1 + (1 / 50);
     ctx.translate(mousePosition.x - pointerType.hotspot.x, mousePosition.y - pointerType.hotspot.y)
     ctx.scale(scale, scale);
+    ctx.globalAlpha = 1; // The pointer must be always opaque!!!
     ctx.drawImage(images['pointer' + pointerType.id], 0, 0, 100, 100);
     ctx.setTransform(transf);
 }
