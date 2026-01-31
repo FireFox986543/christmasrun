@@ -5,6 +5,9 @@ class MenuScene extends Scene {
     #color1 = '#de291f'
     #color2 = '#159741'
     #sceneStart;
+    #fadeDuration = .7;
+    #sceneEnds = undefined;
+    #nextScene;
 
     #mainPanel;
     #modeSelectorPanel;
@@ -15,6 +18,8 @@ class MenuScene extends Scene {
 
     constructor() {
         super();
+
+        this.radius = 120;
 
         this.scrollX = 0;
         this.scrollY = 0;
@@ -46,17 +51,19 @@ class MenuScene extends Scene {
         getSelectedUIElement();
         handleUIClicks();
 
-        if(getKey(KeyCode.KeySpace))
-            dt *= 10;
+        if (animationNow() >= this.#sceneEnds) {
+            loadScene(this.#nextScene);
+            return;
+        }
 
-        const move = Vector2.fromAngle(this.#playerDir, 300);
+        const move = Vector2.normalize(Vector2.fromAngle(this.#playerDir, 1)).multiply(300);
         this.player.position.x += move.x * dt;
         this.player.position.y += move.y * dt;
 
         this.scrollX += (this.player.position.x - this.scrollX) * 0.2;
         this.scrollY += (this.player.position.y - this.scrollY) * 0.2;
 
-        if(this.gameTime >= this.#nextEnemySpawn) {
+        if (this.gameTime >= this.#nextEnemySpawn) {
             this.spawnEnemyAround();
             this.#nextEnemySpawn += .2;
         }
@@ -64,23 +71,48 @@ class MenuScene extends Scene {
         for (let i = 0; i < this.entities.length; i++)
             this.entities[i].update(dt);
 
-        if(this.gameTime >= this.#nextDirChange) {
-            this.#targetDir = Math.random() * Math.PI * 2;
+        if (this.gameTime >= this.#nextDirChange) {
+            this.#targetDir += Math.random() * Math.PI * 2 - Math.PI;
             this.#nextDirChange += Math.random() + 1;
         }
 
-        this.#playerDir += (this.#targetDir - this.#playerDir) * .01;
+        this.#playerDir += (this.#targetDir - this.#playerDir) * .02;
     }
     render(dt) {
         // Clear, Render background
-        clearBuffer('lightblue')
+        clearBuffer('white');
+        ctx.save();
+
+        if (animationNow() <= this.#sceneStart + this.#fadeDuration) {
+            const scale = interpolateEaseOut(Math.min(1, (animationNow() - this.#sceneStart) / this.#fadeDuration), 4);
+            ctx.beginPath();
+            ctx.arc(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2, VIRTUAL_WIDTH * scale, 0, Math.PI * 2);
+            ctx.clip();
+        }
+        else if (animationNow() <= this.#sceneEnds) {
+            const scale = interpolateEaseOut(Math.min(1, (this.#sceneEnds - animationNow()) / this.#fadeDuration), 4);
+            ctx.beginPath();
+            ctx.arc(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2, VIRTUAL_WIDTH * scale, 0, Math.PI * 2);
+            ctx.clip();
+        }
 
         renderBackground();
 
-        globalAlpha = Math.min(1, (animationNow() - this.#sceneStart) / .3);
+        // This is only for the first fade in that happens when the player loads the document, not when the scene changes
+        // At later points the scene changes will be covered with the circleing animation
+        globalAlpha = interpolateEaseOut(Math.min(1, (animationNow()) / .5), 4);
         ctx.globalAlpha = scaleAlpha(1);
-        
+
         renderEntities(dt);
+
+        /*
+            Render directions for player
+        const playerPos = translatePoint(new Vector2(this.player.position.x, this.player.position.y));
+        ctx.lineWidth = 2;
+        line(playerPos, playerPos.add(Vector2.fromAngle(this.#playerDir, 200)), 'purple');
+        line(playerPos, playerPos.add(Vector2.fromAngle(this.#targetDir, 200)), 'green');
+        ctx.fillText(Vector2.fromAngle(this.#playerDir, 200), 300, 400);
+        ctx.fillText(playerPos, 300, 460);*/
 
         ctx.font = '256px "Jersey 10"';
         ctx.fillStyle = '#de291f';
@@ -141,16 +173,17 @@ class MenuScene extends Scene {
         this.renderNode(800 + 0, 20 + 300, this.uiElements[12]); // l*/
 
         renderPointer();
+        ctx.restore();
     }
 
     onLoad() {
         this.#mainPanel = new UIPanel();
-        const playBtn = new UIButton(new Vector2(0, 120), 'PLAY GAME', ButtonTypes.RedLarge, () => { this.#playBtnClick(); }, HorizontalAlign.CENTER, VerticalAlign.BOTTOM, ScaleAndRotateAnimation.apply, HoverFlyUpAnimation.apply, StartFadeFlyUpAnimation.bind(.4, Vector2.up.multiply(120), false));
+        const playBtn = new UIButton(new Vector2(0, 120), 'PLAY GAME', ButtonTypes.RedLarge, () => { this.#playBtnClick(); }, HorizontalAlign.CENTER, VerticalAlign.BOTTOM, ScaleAndRotateAnimation.apply, HoverFlyAnimation.apply, StartFadeFlyUpAnimation.bind(.4, Vector2.up.multiply(120), false));
         playBtn.setParent(this.#mainPanel);
 
         this.#modeSelectorPanel = new UIPanel();
-        const hoverFUA = HoverFlyUpAnimation.apply;
-        const hoverAnim = o => HoverAnimation.bind(1, 3, o);
+        const hoverFUA = HoverFlyAnimation.apply;
+        const hoverAnim = o => HoverAnimation.bind(1, Vector2.up.multiply(3), o);
         const smallWidth = getButtonSize(ButtonTypes.RedSmall).width + 20;
         const smallHeight = getButtonSize(ButtonTypes.RedSmall).height;
         const easyBtn = new UIButton(new Vector2(-smallWidth, 140), 'EASY', ButtonTypes.GreenSmall, () => { this.#playModeBtnClick(0); }, HorizontalAlign.CENTER, VerticalAlign.BOTTOM, hoverAnim(-8), hoverFUA);
@@ -180,6 +213,11 @@ class MenuScene extends Scene {
         this.player.maxLives = 1 / 0; // The player is essentially invulnerable
         this.player.lives = 1 / 0;
         this.entities.push(this.player);
+
+        if (animationNow() > 1)
+            this.#sceneStart = animationNow();
+        else // If we didn't start the game yet
+            this.#sceneStart = -1 / 0;
     }
 
     #titleSine(frequency, amplitude, offset) { return Math.sin(offset + animationNow() * frequency) * amplitude; }
@@ -192,7 +230,13 @@ class MenuScene extends Scene {
         this.#mainPanel.setActive(true);
         this.#modeSelectorPanel.setActive(false);
     }
-    #playModeBtnClick(diff) { loadScene(new ChaseGameScene(diff)); }
+    #playModeBtnClick(diff) {
+        if (this.#sceneEnds !== undefined)
+            return;
+
+        this.#sceneEnds = animationNow() + this.#fadeDuration;
+        this.#nextScene = new ChaseGameScene(diff);
+    }
 
     spawnEnemyAround() {
         const point = Vector2.fromAngle(randomDir(), Math.max(VIRTUAL_WIDTH, VIRTUAL_HEIGHT));

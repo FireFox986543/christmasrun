@@ -120,7 +120,6 @@ function loop() {
         }
     }
 
-    end:
     requestAnimationFrame(loop);
 }
 

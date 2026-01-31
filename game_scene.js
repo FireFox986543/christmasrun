@@ -1,6 +1,8 @@
 class ChaseGameScene extends Scene {
     #diedUIContainer;
     #sceneStart;
+    #sceneEnds = undefined;
+    #fadeDuration = .7;
 
     constructor(difficultyLevel) {
         super();
@@ -25,17 +27,14 @@ class ChaseGameScene extends Scene {
         getSelectedUIElement();
         handleUIClicks();
 
+        if (animationNow() >= this.#sceneEnds) {
+            loadScene(new MenuScene());
+            return;
+        }
+
         // We clicked the home button
         if (scene !== this)
             return;
-
-        if (getKeyDown(KeyCode.KeyP))
-            this.#diedUIContainer.setActive(!this.#diedUIContainer.isActive);
-
-        if (getKeyDown(KeyCode.KeyF1))
-            this.DEBUG = !this.DEBUG;
-        if (getKeyDown(KeyCode.KeyI))
-            this.player.lives = 100000;
 
         if (timeScale === 0)
             return;
@@ -52,10 +51,14 @@ class ChaseGameScene extends Scene {
             const keyW = getKey(KeyCode.KeyW) || getKey(KeyCode.KeyArrowUp);
             const keyS = getKey(KeyCode.KeyS) || getKey(KeyCode.KeyArrowDown);
 
-            this.horizontal += (keyA ? -1 : 0) + (keyD ? 1 : 0);
+            const horiValue = (keyA ? -1 : 0) + (keyD ? 1 : 0);
+            const vertiValue = (keyS ? -1 : 0) + (keyW ? 1 : 0);
+            const vector = Vector2.normalize(new Vector2(horiValue, vertiValue));
+
+            this.horizontal += vector.x;
             this.horizontal = Math.max(-1, Math.min(1, this.horizontal))
 
-            this.vertical += (keyS ? -1 : 0) + (keyW ? 1 : 0);
+            this.vertical += vector.y;
             this.vertical = Math.max(-1, Math.min(1, this.vertical))
 
             this.player.syncInput(this.horizontal, this.vertical);
@@ -95,7 +98,21 @@ class ChaseGameScene extends Scene {
     }
     render(dt) {
         // Clear
-        clearBuffer('#6cc2ff');
+        clearBuffer('white');
+        ctx.save();
+
+        if (animationNow() <= this.#sceneStart + this.#fadeDuration) {
+            const scale = interpolateEaseOut(Math.min(1, (animationNow() - this.#sceneStart) / this.#fadeDuration), 4);
+            ctx.beginPath();
+            ctx.arc(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2, VIRTUAL_WIDTH * scale, 0, Math.PI * 2);
+            ctx.clip();
+        }
+        else if (animationNow() <= this.#sceneEnds) {
+            const scale = interpolateEaseOut(Math.min(1, (this.#sceneEnds - animationNow()) / this.#fadeDuration), 4);
+            ctx.beginPath();
+            ctx.arc(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2, VIRTUAL_WIDTH * scale, 0, Math.PI * 2);
+            ctx.clip();
+        }
 
         // Render xy axis lines
         if (this.DEBUG) {
@@ -113,11 +130,12 @@ class ChaseGameScene extends Scene {
 
         renderBackground();
 
-        globalAlpha = interpolateEaseOut(Math.min(1, (animationNow() - this.#sceneStart) / .3), 4);
         ctx.globalAlpha = scaleAlpha(1);
 
         // Render entities
         const culled = renderEntities(dt);
+
+        ctx.globalAlpha = scaleAlpha(1);
 
         // Render debug entries
         if (this.DEBUG) {
@@ -212,6 +230,8 @@ class ChaseGameScene extends Scene {
 
         // Render mouse pointer
         renderPointer();
+
+        ctx.restore();
     }
 
     resetDifficulties() {
@@ -236,6 +256,7 @@ class ChaseGameScene extends Scene {
                 enemyNextSpeedIncrease: 18,
                 enemyCollisionRadius: 120,
                 enemyCollisionRadiusSquared: 120 * 120, // Squared distance in enemies will collide with the player
+                playerSpeed: 250,
             },
             { // Normal
                 startEnemies: 20, // How many enemies will spawn by default on game start
@@ -257,6 +278,7 @@ class ChaseGameScene extends Scene {
                 enemyNextSpeedIncrease: 12,
                 enemyCollisionRadius: 150,
                 enemyCollisionRadiusSquared: 150 * 150, // Squared distance in enemies will collide with the player
+                playerSpeed: 220,
             },
             { // Hard
                 startEnemies: 40, // How many enemies will spawn by default on game start
@@ -278,6 +300,7 @@ class ChaseGameScene extends Scene {
                 enemyNextSpeedIncrease: 8,
                 enemyCollisionRadius: 170,
                 enemyCollisionRadiusSquared: 170 * 170, // Squared distance in enemies will collide with the player
+                playerSpeed: 200,
             }
         ];
     }
@@ -313,7 +336,7 @@ class ChaseGameScene extends Scene {
         }, 2000);
     }
     spawnPlayer() {
-        this.player = new PlayerEntity(new Vector2(0, 0), new Size(230, 230), 200);
+        this.player = new PlayerEntity(new Vector2(0, 0), new Size(230, 230), this.difficulty.playerSpeed);
         this.entities.push(this.player);
     }
     spawnEnemies(amount, scatter, nsW, nsH) {
@@ -361,17 +384,26 @@ class ChaseGameScene extends Scene {
         outlinedText(viewport.viewRight - 20, 96, 0, 4, text);
     }
 
+    #loadMenu() {
+        if (this.#sceneEnds !== undefined)
+            return;
+
+        this.#sceneEnds = animationNow() + this.#fadeDuration;
+    }
+
     onLoad() {
         this.#diedUIContainer = new UIPanel();
         const smallWidth = getButtonSize(ButtonTypes.RedSmall).width / 2 + 60;
         const y = 100;
         const startAnim = StartFadeFlyUpAnimation.bind(.6, Vector2.up.multiply(200));
-        const restartBtn = new UIButton(new Vector2(-smallWidth, y), 'RESTART', ButtonTypes.RedSmall, () => { this.restartGame(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply, startAnim);
-        const homeBtn = new UIButton(new Vector2(smallWidth, y), 'HOME', ButtonTypes.BlueSmall, () => { loadScene(new MenuScene()); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyUpAnimation.apply, startAnim);
+        const restartBtn = new UIButton(new Vector2(-smallWidth, y), 'RESTART', ButtonTypes.RedSmall, () => { this.restartGame(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyAnimation.apply, startAnim);
+        const homeBtn = new UIButton(new Vector2(smallWidth, y), 'HOME', ButtonTypes.BlueSmall, () => { this.#loadMenu(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyAnimation.apply, startAnim);
+
+        const homeArrowBtn = new UIButton(new Vector2(20, 20), '', ButtonTypes.Arrow, () => { this.#loadMenu(); }, HorizontalAlign.LEFT, VerticalAlign.TOP, HoverAnimation.apply, HoverFlyAnimation.bind(.3, Vector2.left.multiply(16)));
 
         this.#diedUIContainer.appendMultiple(restartBtn, homeBtn);
         this.#diedUIContainer.setActive(false);
-        this.uiElements.push(this.#diedUIContainer, restartBtn, homeBtn);
+        this.uiElements.push(this.#diedUIContainer, restartBtn, homeBtn, homeArrowBtn);
 
         this.restartGame();
     }

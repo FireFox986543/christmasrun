@@ -28,11 +28,13 @@ class Vector2 {
 
     static angleTowards(a, b) { return Math.atan2(b.y - a.y, b.x - a.x); }
     // NOTE: before it was called 'moveDirection', so replace that old knowledge with this more accurate name
-    static fromAngle(angle, magnitude) { return new Vector2(Math.cos(angle) * magnitude, Math.sin(angle) * magnitude); }
+    static fromAngle(angle, magnitude = 1) { return new Vector2(Math.cos(angle) * magnitude, Math.sin(angle) * magnitude); }
     static normalize(a) {
         const mag = a.magnitude;
         return mag === 0 ? Vector2.zero : a.divide(mag);
     }
+
+    toString() { return `(${this.x.toFixed(2)}, ${this.y.toFixed(2)})`;}
 }
 class Size {
     static zero = new Size(0, 0);
@@ -86,6 +88,8 @@ const UIAtlas = Object.freeze({
     HL_ButtonBlueSmall: new ClipRegion(60, 60, 40, 10, 'ui_atlas', 10),
     HL_ButtonGreenLarge: new ClipRegion(0, 70, 60, 10, 'ui_atlas', 10),
     HL_ButtonGreenSmall: new ClipRegion(60, 70, 40, 10, 'ui_atlas', 10),
+    ButtonArrow: new ClipRegion(0, 81, 24, 17, 'ui_atlas', 5),
+    HL_ButtonArrow: new ClipRegion(0, 81, 24, 17, 'ui_atlas', 5),
 });
 const ButtonTypes = Object.freeze({
     RedLarge: 'ButtonRedLarge',
@@ -96,6 +100,7 @@ const ButtonTypes = Object.freeze({
     BlueSmall: 'ButtonBlueSmall',
     GreenLarge: 'ButtonGreenLarge',
     GreenSmall: 'ButtonGreenSmall',
+    Arrow: 'ButtonArrow',
 });
 function getButtonSize(btntype) { return UIAtlas[btntype].fullSize(); }
 
@@ -127,28 +132,32 @@ class ScaleAndRotateAnimation {
     static bind(speed, rotate, scaleAmount) { return (e) => { return ScaleAndRotateAnimation.#handle(e, speed, rotate, scaleAmount); } };
 }
 class HoverAnimation {
-    static apply = this.bind(1, 3, 0);
-    static #handle(e, speed, amount, offset) {
-        ctx.translate(0, Math.sin(animationNow() * speed + offset) * amount);
+    static apply = this.bind(2, Vector2.up.multiply(3), 0);
+    static #handle(e, speed, vector, offset) {
+        const t = Math.sin(animationNow() * speed + offset);
+        const vec = vector.multiply(t);
+        ctx.translate(-vec.x, vec.y);
         return new Vector2(e.x, e.y);
     }
-    static bind(speed, amount, offset) { return (e) => { return HoverAnimation.#handle(e, speed, amount, offset); } };
+    static bind(speed, vector, offset) { return (e) => { return HoverAnimation.#handle(e, speed, vector, offset); } };
 }
-class HoverFlyUpAnimation {
-    static apply = this.bind(.3, 16);
-    static #handle(e, duration, amount) {
+class HoverFlyAnimation {
+    static apply = this.bind(.3, Vector2.up.multiply(16));
+    static #handle(e, duration, vector) {
         if (e.mouseOver) {
             const t = Math.min(1, (animationNow() - e.hoverStart) / duration);
-            ctx.translate(0, -interpolateEaseIn(t, 3) * amount);
+            const vec = vector.multiply(-interpolateEaseIn(t, 3));
+            ctx.translate(-vec.x, vec.y);
             return;
         }
         const hoverEnds = e.hoverEnd + duration
         if (animationNow() <= hoverEnds) {
             const t = Math.min(1, (hoverEnds - animationNow()) / duration);
-            ctx.translate(0, -interpolateEaseOut(t, 3) * amount);
+            const vec = vector.multiply(-interpolateEaseIn(t, 3));
+            ctx.translate(-vec.x, vec.y);
         }
     }
-    static bind(duration, amount) { return (e) => { HoverFlyUpAnimation.#handle(e, duration, amount); }; }
+    static bind(duration, vector) { return (e) => { HoverFlyAnimation.#handle(e, duration, vector); }; }
 }
 class StartFadeFlyUpAnimation {
     static apply = this.bind(.4, Vector2.up.multiply(120));
