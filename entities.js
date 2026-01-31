@@ -17,6 +17,7 @@ class Entity {
 
 class PlayerEntity extends Entity {
     static #deathFadeStart = 0;
+    static highscores = [];
 
     constructor(position, size, speed) {
         super(position, size);
@@ -84,6 +85,7 @@ class PlayerEntity extends Entity {
         if (this.isImmune) return;
 
         this.highScore = Math.max(this.highScore, this.score);
+        PlayerEntity.highscores[scene.difficultyLevel] = this.highScore;
         this.dead = true;
         this.immune = 1 / 0;
         this.deathAStart = animationNow() + 1.5;
@@ -100,11 +102,14 @@ class ChainsawEnemy extends Entity {
 
     static #removalDistance = 5000 * 5000; // Note: squared
 
+    #animOffset;
+
     constructor(position, size) {
         super(position, size);
         this.rotation = 0;
         this.impulse = new Vector2(0, 0);
         this.playerDistance = 0;
+        this.#animOffset = Math.random();
     }
 
     static staticUpdate() {
@@ -166,7 +171,13 @@ class ChainsawEnemy extends Entity {
         if (this.playerDistance < 25) // Avoid back-to-back flickering when the enemy is at the same pos as the player
             flip = 1;
         ctx.scale(flip, 1);
-        ctx.drawImage(images['chainsaw'], -this.size.width / 2, -this.size.height / 2, this.size.width, this.size.height)
+
+        const animIdx = Math.floor((scene.gameTime + this.#animOffset) * 7 % 4);
+        const cropX = animIdx % 2;
+        const cropY = Math.floor(animIdx / 2);
+
+        // Note: 93 -> size + 1, because we added 1px gaps between images
+        ctx.drawImage(images['chainsaw'], cropX * 93, cropY * 93, 92, 92,-this.size.width / 2, -this.size.height / 2, this.size.width, this.size.height)
 
         // Debug
         if (!scene.DEBUG) return;

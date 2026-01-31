@@ -2,6 +2,7 @@ class ChaseGameScene extends Scene {
     #diedUIContainer;
     #sceneStart;
     #sceneEnds = undefined;
+    #nextScene;
     #fadeDuration = .7;
 
     constructor(difficultyLevel) {
@@ -28,9 +29,12 @@ class ChaseGameScene extends Scene {
         handleUIClicks();
 
         if (animationNow() >= this.#sceneEnds) {
-            loadScene(new MenuScene());
+            loadScene(this.#nextScene);
             return;
         }
+
+        if(getKeyDown(KeyCode.KeyF1))
+            this.DEBUG = !this.DEBUG;
 
         // We clicked the home button
         if (scene !== this)
@@ -230,7 +234,6 @@ class ChaseGameScene extends Scene {
 
         // Render mouse pointer
         renderPointer();
-
         ctx.restore();
     }
 
@@ -317,16 +320,13 @@ class ChaseGameScene extends Scene {
         this.difficulty = this.difficulties[this.difficultyLevel];
         this.#diedUIContainer.setActive(false);
 
-        // Keep highscore across multiple restarts
-        let highScore = this.player === undefined ? 0 : this.player.highScore;
-
         this.spawnPlayer();
 
         if (this.enemySpawning)
             this.spawnEnemies(this.difficulty.startEnemies, this.difficulty.startEnemiesScatter, 400, 400);
 
         //entities.push(new ChainsawEnemy(new Point(200, 200), new Size(200, 200), 0));
-        this.player.highScore = highScore;
+        this.player.highScore = PlayerEntity.highscores[this.difficultyLevel] || 0;
 
         this.#sceneStart = animationNow();
     }
@@ -389,6 +389,15 @@ class ChaseGameScene extends Scene {
             return;
 
         this.#sceneEnds = animationNow() + this.#fadeDuration;
+        this.#nextScene = new MenuScene();
+    }
+
+    #restart() {
+        if (this.#sceneEnds !== undefined)
+            return;
+
+        this.#sceneEnds = animationNow() + this.#fadeDuration;
+        this.#nextScene = new ChaseGameScene(this.difficultyLevel);
     }
 
     onLoad() {
@@ -396,8 +405,8 @@ class ChaseGameScene extends Scene {
         const smallWidth = getButtonSize(ButtonTypes.RedSmall).width / 2 + 60;
         const y = 100;
         const startAnim = StartFadeFlyUpAnimation.bind(.6, Vector2.up.multiply(200));
-        const restartBtn = new UIButton(new Vector2(-smallWidth, y), 'RESTART', ButtonTypes.RedSmall, () => { this.restartGame(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyAnimation.apply, startAnim);
-        const homeBtn = new UIButton(new Vector2(smallWidth, y), 'HOME', ButtonTypes.BlueSmall, () => { this.#loadMenu(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, null, HoverFlyAnimation.apply, startAnim);
+        const restartBtn = new UIButton(new Vector2(-smallWidth, y), 'RESTART', ButtonTypes.RedSmall, () => { this.#restart(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, HoverAnimation.bind(3, Vector2.up.multiply(4), 4), HoverFlyAnimation.apply, startAnim);
+        const homeBtn = new UIButton(new Vector2(smallWidth, y), 'HOME', ButtonTypes.BlueSmall, () => { this.#loadMenu(); }, HorizontalAlign.CENTER, VerticalAlign.CENTER, HoverAnimation.bind(3, Vector2.up.multiply(4), -4), HoverFlyAnimation.apply, startAnim);
 
         const homeArrowBtn = new UIButton(new Vector2(20, 20), '', ButtonTypes.Arrow, () => { this.#loadMenu(); }, HorizontalAlign.LEFT, VerticalAlign.TOP, HoverAnimation.apply, HoverFlyAnimation.bind(.3, Vector2.left.multiply(16)));
 

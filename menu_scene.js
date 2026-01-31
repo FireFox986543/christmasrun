@@ -183,7 +183,7 @@ class MenuScene extends Scene {
 
         this.#modeSelectorPanel = new UIPanel();
         const hoverFUA = HoverFlyAnimation.apply;
-        const hoverAnim = o => HoverAnimation.bind(1, Vector2.up.multiply(3), o);
+        const hoverAnim = o => HoverAnimation.bind(4, Vector2.up.multiply(3), o);
         const smallWidth = getButtonSize(ButtonTypes.RedSmall).width + 20;
         const smallHeight = getButtonSize(ButtonTypes.RedSmall).height;
         const easyBtn = new UIButton(new Vector2(-smallWidth, 140), 'EASY', ButtonTypes.GreenSmall, () => { this.#playModeBtnClick(0); }, HorizontalAlign.CENTER, VerticalAlign.BOTTOM, hoverAnim(-8), hoverFUA);

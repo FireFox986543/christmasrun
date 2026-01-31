@@ -67,6 +67,8 @@ function resizeCanvas() {
     ctx.scale(viewport.scale, viewport.scale);
 
     ctx.imageSmoothingEnabled = false;
+    ctx.webkitImageSmoothingEnabled = false;
+    ctx.mozImageSmoothingEnabled = false;
 }
 async function requestImages() {
     const paths = {
